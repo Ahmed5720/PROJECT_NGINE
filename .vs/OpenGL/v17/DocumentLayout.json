@@ -1,0 +1,78 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Dev\\OpenGL\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|C:\\Dev\\OpenGL\\OpenGL\\src\\app.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|solutionrelative:OpenGL\\src\\app.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|C:\\Dev\\OpenGL\\OpenGL\\res\\shaders\\basic.shader||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|solutionrelative:OpenGL\\res\\shaders\\basic.shader||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|C:\\Dev\\OpenGL\\DEPENDENCIES\\GLEW\\INCLUDE\\GL\\GLEW.H||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{2CD4FEE8-D3AB-4E86-9816-559F392B97BE}|OpenGL\\OpenGL.vcxproj|solutionrelative:DEPENDENCIES\\GLEW\\INCLUDE\\GL\\GLEW.H||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 3,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{3ae79031-e1bc-11d0-8f78-00a0c9110057}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "basic.shader",
+              "DocumentMoniker": "C:\\Dev\\OpenGL\\OpenGL\\res\\shaders\\basic.shader",
+              "RelativeDocumentMoniker": "OpenGL\\res\\shaders\\basic.shader",
+              "ToolTip": "C:\\Dev\\OpenGL\\OpenGL\\res\\shaders\\basic.shader",
+              "RelativeToolTip": "OpenGL\\res\\shaders\\basic.shader",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-06-19T00:46:13.783Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "app.cpp",
+              "DocumentMoniker": "C:\\Dev\\OpenGL\\OpenGL\\src\\app.cpp",
+              "RelativeDocumentMoniker": "OpenGL\\src\\app.cpp",
+              "ToolTip": "C:\\Dev\\OpenGL\\OpenGL\\src\\app.cpp",
+              "RelativeToolTip": "OpenGL\\src\\app.cpp",
+              "ViewState": "AgIAAGAAAAAAAAAAAAAuwGoAAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-06-16T15:21:17.27Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "glew.h",
+              "DocumentMoniker": "C:\\Dev\\OpenGL\\Dependencies\\GLEW\\include\\GL\\glew.h",
+              "RelativeDocumentMoniker": "Dependencies\\GLEW\\include\\GL\\glew.h",
+              "ToolTip": "C:\\Dev\\OpenGL\\Dependencies\\GLEW\\include\\GL\\glew.h",
+              "RelativeToolTip": "Dependencies\\GLEW\\include\\GL\\glew.h",
+              "ViewState": "AgIAAEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-06-18T02:10:08.108Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
