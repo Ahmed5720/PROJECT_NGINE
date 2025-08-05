@@ -1,1 +1,1 @@
-Fluid simulation in OpenGL and Cuda
+Fluid simulation in OpenGL and Cuda:
