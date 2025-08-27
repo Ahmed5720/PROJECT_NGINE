@@ -8,15 +8,29 @@
 
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
-
-class sphere
+class particle
 {
 public:
     // renders (and builds at first invocation) a sphere // adapted from learnopengl.com
     // -------------------------------------------------
     unsigned int sphereVAO = 0;
     unsigned int indexCount;
+    std::vector<glm::vec3> velocities;
+    std::vector<glm::vec3> positions;
+    std::vector<float> densities;
+    float smoothingRadius = 0.3f;
+    float mass = 1.0;
+
+    double PI = 3.14159265358979323846;
+
+
+
+    glm::vec3 red = glm::vec3(1.0f, 0.0f, 0.0f);
+    glm::vec3 yellow = glm::vec3(1.0f, 1.0f, 0.0f);
+    glm::vec3 green = glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::vec3 blue = glm::vec3(0.0f, 0.0f, 1.0f);
     void renderSphere()
     {
         if (sphereVAO == 0)
@@ -114,25 +128,119 @@ public:
     //first we need a function to calculate a particle's influence at a given distance from it
     float smoothingKernel(float radius, float dst)
     {   
-        constexpr double PI = 3.14159265358979323846;
+        
         float volume = PI * pow(radius, 8) / 4;
         float value = std::max(0.0f, radius * radius - dst * dst);
         return value * value * value / volume;
     }
 
+
+    float smoothingKernelDerivative(float radius, float dst)
+    {
+        if (dst >= radius) return 0;
+        float f = radius * radius - dst * dst;
+        float scale = -24 / (PI * pow(radius, 8));
+        return scale * dst * f * f;
+    }
     //now we can calculate density at a given point by summing up particle influences at this point
-    glm::vec3 positions[5];
+    
     float CalcDensity(glm::vec3 sample)
     {
         float density = 0;
-        const float mass = 1;
-        float rad = 0.5f;
+       
+        
         for (glm::vec3 pos : positions)
         {
             float dst = glm::distance(pos, sample);
-            density += mass * smoothingKernel(rad, dst);
+            density += mass * smoothingKernel(smoothingRadius, dst);
         }
 
         return density;
+    }
+
+
+    float DensityToPressure(float density)
+    {
+        float densityError = density - targetDensity;
+        return densityError * pressureMultiplier;
+    }
+
+    glm::vec3 CalcPressureForce(glm::vec3 sample)
+    {
+        glm::vec3 force(0,0,0);
+        int i = 0;
+        for (glm::vec3 pos : positions)
+        {
+            float dst = glm::distance(pos, sample);
+            if (fabsf(dst) > 0) {
+
+                glm::vec3 dir = (pos - sample) / dst;
+                float slope = smoothingKernelDerivative(smoothingRadius, dst);
+                float density = densities[i];
+                force += -DensityToPressure(density) * dir * slope * mass; // / density;
+               
+            }
+            i++;
+        }
+        return force;
+    }
+
+    float targetDensity = 1;
+    float pressureMultiplier = 1;
+    float damping = 0.7;
+    void check_collision(float x1, float x2, float y1, float y2, float z1, float z2, int i)
+    {   
+
+        // checks if particle collides with bounding box, if so invert velocity direction and damp it.
+        // X-axis
+        if (positions[i].x < x1) {
+            positions[i].x = x1; // clamp inside
+            velocities[i].x *= -damping;
+        }
+        else if (positions[i].x > x2) {
+            positions[i].x = x2;
+            velocities[i].x *= -damping;
+        }
+
+        // Y-axis
+        if (positions[i].y < y1) {
+            positions[i].y = y1;
+            velocities[i].y *= -damping;
+        }
+        else if (positions[i].y > y2) {
+            positions[i].y = y2;
+            velocities[i].y *= -damping;
+        }
+
+        // Z-axis
+        if (positions[i].z < z1) {
+            positions[i].z = z1;
+            velocities[i].z *= -damping;
+        }
+        else if (positions[i].z > z2) {
+            positions[i].z = z2;
+            velocities[i].z *= -damping;
+        }
+    }
+
+    glm::vec3 heatmap(float minVal, float maxVal, float val) {
+        // Normalize val to [0,1]
+        float t = (val - minVal) / (maxVal - minVal);
+        t = std::clamp(t, 0.0f, 1.0f);
+
+        
+
+        if (t < 0.33f) {
+            float localT = t / 0.33f; // [0,1] within [0,0.33]
+            return glm::mix(blue, green, localT);
+        }
+        else if (t < 0.66f) {
+            float localT = (t - 0.33f) / (0.33f); // [0,1] within [0.33,0.66]
+            return glm::mix(green, yellow, localT);
+        }
+        else {
+            float localT = (t - 0.66f) / (0.34f); // [0,1] within [0.66,1.0]
+            return glm::mix(yellow, red, localT);
+        }
     }
 };

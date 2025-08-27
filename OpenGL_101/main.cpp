@@ -20,7 +20,7 @@
 
 #include "Shader.h"
 #include "camera.h"
-#include "sphere.h"
+#include "particle.h"
 
 #include <vector>
 #include <iostream>
@@ -45,8 +45,8 @@ bool firstMouse = true;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-int num_particles = 100;
-
+int num_particles = 500;
+float timestep_ = 1.0f;
 float particle_size = 0.1f;
 glm::vec3 bounding_box = glm::vec3(5, 5, 5);
 
@@ -60,8 +60,11 @@ std::vector<float> particlePositions_x;
 std::vector<float> particlePositions_y;
 std::vector<float> particlePositions_z;
 
-void gen_particle_positions()
+
+
+void gen_particle_positions(particle& particles)
 {
+    
     for (unsigned int i = 0; i < num_particles; i++)
     {
 
@@ -78,9 +81,9 @@ void gen_particle_positions()
         float y = dist_y(gen);
         float z = dist_z(gen);
 
-        particlePositions_x.push_back(x);
-        particlePositions_y.push_back(y);
-        particlePositions_z.push_back(z);
+        particles.positions.push_back(glm::vec3(x, y, z));
+        particles.velocities.push_back(glm::vec3(0));
+        particles.densities.push_back(0);
 
     }
 }
@@ -98,7 +101,7 @@ int main()
 
     // glfw window creation
     // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "scene", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -222,7 +225,10 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    gen_particle_positions();
+
+    particle particles;
+
+    gen_particle_positions(particles);
     
     ourShader.use();
   
@@ -259,10 +265,13 @@ int main()
             ImGui::Separator();
 
             // Particle settings
-            ImGui::SliderInt("Number of Particles X", &num_particles, 1, 1000);
+            ImGui::SliderInt("Number of Particles", &num_particles, 1, 1000);
          
             ImGui::SliderFloat("Particle Size", &particle_size, 0.1, 5.0f);
 
+            ImGui::SliderFloat("smoothing radius", &particles.smoothingRadius, 0, 20.0f);
+            ImGui::SliderFloat("particle mass", &particles.mass, 0, 10.0f);
+            ImGui::SliderFloat("timestep", &timestep_, 0, 10.0f);
             // Bounding box settings
             ImGui::Text("Bounding Box Size");
             ImGui::SliderFloat("Box X", &bounding_box.x, 1.0f, 50.0f);
@@ -329,36 +338,61 @@ int main()
         ourShader.setVec3("color", glm::vec3(1,1,1));
         glDrawArrays(GL_LINES, 0, 36);
 
-        sphere sphere; 
+       
         //draw our particles
-        float y_pos = 2;
+
         for (unsigned int i = 0; i < num_particles; i++)
         {   
             
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
-               
+
+
             std::random_device rd;
             std::mt19937 gen(rd()); // Mersenne Twister engine seeded
 
             // Define ranges for each float
-            std::uniform_real_distribution<float> dist_x(-bounding_box.x / 2, bounding_box.x / 2);   
-            std::uniform_real_distribution<float> dist_y(-bounding_box.y / 2, bounding_box.y / 2);   
-            std::uniform_real_distribution<float> dist_z(-bounding_box.z / 2, bounding_box.z / 2);  
+            std::uniform_real_distribution<float> dist_x(-1, 1);
+            std::uniform_real_distribution<float> dist_y(-1, 1);
+            std::uniform_real_distribution<float> dist_z(-1, 1);
 
             // Generate random values
             float x = dist_x(gen);
             float y = dist_y(gen);
             float z = dist_z(gen);
 
+            glm::vec3 randDir(x, y, z);
 
-            model = glm::translate(model, glm::vec3(particlePositions_x[i], particlePositions_y[i], particlePositions_z[i]));
+            float density = particles.CalcDensity(particles.positions[i]);
+            particles.densities[i] = density;
+            float magnitude = sqrt(particles.mass * density);
+            particles.velocities[i] += (magnitude * randDir);
+
+            //glm::vec3 pressureForce = particles.CalcPressureForce(particles.positions[i]);
+            //glm::vec3 pressureAcceleration = pressureForce;// particles.densities[i];
+
+            //particles.velocities[i] += pressureAcceleration * timestep_;
+
+            //std::cout << "vs" <<(particles.velocities[i].x) << "\n";
+            particles.positions[i] += particles.velocities[i] * 0.010f * timestep_;
+            particles.check_collision(-bounding_box.x/2, bounding_box.x / 2, -bounding_box.y / 2, bounding_box.y / 2, -bounding_box.z / 2, bounding_box.z / 2, i);
+            //particle must recieve force that is in the opposite direction its going
+            //direction is just normalized velocity so take that and multiply it by force magnitude. force is the density at that point for now
+            // new velocity = f = ma then sqrt (f/m)?
+            // position just += velocity * timestep?
+                // since d/t = v therefore d = vt
+            //and then update positions directly with that.
+            // but at first velocity is 
+            
+            model = glm::translate(model, particles.positions[i]);
             model = glm::scale(model, glm::vec3(particle_size, particle_size, particle_size));
+            
+            glm::vec3 heat = particles.heatmap(5, 10, density);
             //float angle = 20.0f * i + (float)glfwGetTime() * 50.0f; // Add rotation over time
             //model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
             ourShader.setMat4("model", model);
-            ourShader.setVec3("color", glm::vec3(0, 0.4, 0.5));
-            sphere.renderSphere();
+            ourShader.setVec3("color", heat);
+            particles.renderSphere();
             //glDrawArrays(GL_TRIANGLES, 0, 36);
 
           
