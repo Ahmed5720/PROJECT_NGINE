@@ -20,11 +20,13 @@ public:
     std::vector<glm::vec3> velocities;
     std::vector<glm::vec3> positions;
     std::vector<float> densities;
-    float smoothingRadius = 0.3f;
-    float mass = 1.0;
-
+    float smoothingRadius = 3.0f;
+    float mass = 10;
+    float targetDensity = 1;
+    float pressureMultiplier = 1;
+    float damping = 0.7;
     double PI = 3.14159265358979323846;
-
+    float min_dist = 0.2f;
 
 
     glm::vec3 red = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -131,7 +133,7 @@ public:
         
         float volume = PI * pow(radius, 8) / 4;
         float value = std::max(0.0f, radius * radius - dst * dst);
-        return value * value * value / volume;
+        return dst == 0? 0 : value * value * value / volume;
     }
 
 
@@ -148,11 +150,12 @@ public:
     {
         float density = 0;
        
-        
-        for (glm::vec3 pos : positions)
+        int i = 0;
+        for (const glm::vec3 pos : positions)
         {
             float dst = glm::distance(pos, sample);
             density += mass * smoothingKernel(smoothingRadius, dst);
+            i++;
         }
 
         return density;
@@ -169,7 +172,7 @@ public:
     {
         glm::vec3 force(0,0,0);
         int i = 0;
-        for (glm::vec3 pos : positions)
+        for (const glm::vec3 pos : positions)
         {
             float dst = glm::distance(pos, sample);
             if (fabsf(dst) > 0) {
@@ -177,7 +180,7 @@ public:
                 glm::vec3 dir = (pos - sample) / dst;
                 float slope = smoothingKernelDerivative(smoothingRadius, dst);
                 float density = densities[i];
-                force += -DensityToPressure(density) * dir * slope * mass; // / density;
+                force += DensityToPressure(density) * dir * slope * mass / density;
                
             }
             i++;
@@ -185,9 +188,39 @@ public:
         return force;
     }
 
-    float targetDensity = 1;
-    float pressureMultiplier = 1;
-    float damping = 0.7;
+    
+    void check_particle_collision(int id)
+    {
+        for (int i = 0; i < positions.size(); i++) {
+            if (i == id) continue;
+
+            glm::vec3 delta = positions[id] - positions[i];
+            float dist = glm::length(delta);
+
+            if (dist < min_dist && dist > 1e-6f) {
+                glm::vec3 normal = delta / dist;
+
+                // --- Velocity along normal
+                float v1n = glm::dot(velocities[id], normal);
+                float v2n = glm::dot(velocities[i], normal);
+
+                // --- Swap normal components (elastic collision, equal masses)
+                float temp = v1n;
+                v1n = v2n;
+                v2n = temp;
+
+                // --- Recombine into new velocities
+                velocities[id] += (v1n - glm::dot(velocities[id], normal)) * normal;
+                velocities[i] += (v2n - glm::dot(velocities[i], normal)) * normal;
+
+                // --- Push them apart to avoid overlap
+                float penetration = min_dist - dist;
+                glm::vec3 correction = 0.5f * penetration * normal;
+                positions[id] += correction;
+                positions[i] -= correction;
+            }
+        }
+    }
     void check_collision(float x1, float x2, float y1, float y2, float z1, float z2, int i)
     {   
 
@@ -227,7 +260,7 @@ public:
         // Normalize val to [0,1]
         float t = (val - minVal) / (maxVal - minVal);
         t = std::clamp(t, 0.0f, 1.0f);
-
+        t *= t;
         
 
         if (t < 0.33f) {

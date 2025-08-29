@@ -45,9 +45,11 @@ bool firstMouse = true;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-int num_particles = 500;
+int num_particles = 400;
 float timestep_ = 1.0f;
 float particle_size = 0.1f;
+float gravity = 9.8f;
+float minDense = 1, maxDense = 5;
 glm::vec3 bounding_box = glm::vec3(5, 5, 5);
 
 
@@ -270,13 +272,21 @@ int main()
             ImGui::SliderFloat("Particle Size", &particle_size, 0.1, 5.0f);
 
             ImGui::SliderFloat("smoothing radius", &particles.smoothingRadius, 0, 20.0f);
-            ImGui::SliderFloat("particle mass", &particles.mass, 0, 10.0f);
+            ImGui::SliderFloat("particle mass", &particles.mass, 0, 100.0f);
+            ImGui::SliderFloat("Target Density ", &particles.targetDensity, -100, 100.0f);
+            ImGui::SliderFloat("Pressure Multiplier ", &particles.pressureMultiplier, 0, 10.0f);
+            ImGui::SliderFloat("damping", &particles.damping, 0, 10.0f);
+            ImGui::SliderFloat("gravity", &gravity, 0, 10.0f);
+            ImGui::SliderFloat("minDense", &minDense, -100, 100.0f);
+            ImGui::SliderFloat("maxDense", &maxDense, -100, 100.0f);
+            ImGui::SliderFloat("particle collider", &particles.min_dist, 0.1, 10.0f);
+
             ImGui::SliderFloat("timestep", &timestep_, 0, 10.0f);
             // Bounding box settings
             ImGui::Text("Bounding Box Size");
-            ImGui::SliderFloat("Box X", &bounding_box.x, 1.0f, 50.0f);
-            ImGui::SliderFloat("Box Y", &bounding_box.y, 1.0f, 50.0f);
-            ImGui::SliderFloat("Box Z", &bounding_box.z, 1.0f, 50.0f);
+            ImGui::SliderFloat("Box X", &bounding_box.x, 0.1f, 50.0f);
+            ImGui::SliderFloat("Box Y", &bounding_box.y, 0.1f, 50.0f);
+            ImGui::SliderFloat("Box Z", &bounding_box.z, 0.1f, 50.0f);
 
             // Camera settings
             ImGui::Separator();
@@ -338,9 +348,43 @@ int main()
         ourShader.setVec3("color", glm::vec3(1,1,1));
         glDrawArrays(GL_LINES, 0, 36);
 
+        glm::vec3 boxSize = bounding_box; // dimensions of bounding box
+        for (int x = 0; x < (int)boxSize.x; x++) {
+            for (int y = 0; y < (int)boxSize.y; y++) {
+                for (int z = 0; z < (int)boxSize.z; z++) {
+
+                    glm::mat4 model = glm::mat4(1.0f);
+
+                    // translate cube to grid position
+                    model = glm::translate(model, glm::vec3(x - boxSize.x/2, y - boxSize.y/2, z - boxSize.z/2 ));
+
+                    // scale to unit cube (side length = 1)
+                    model = glm::scale(model, glm::vec3(1.0f));
+
+                    // set uniforms
+                    ourShader.setMat4("model", model);
+                    ourShader.setVec3("color", glm::vec3(1, 1, 1));
+
+                    // draw cube as wireframe
+                    glDrawArrays(GL_LINES, 0, 36);
+                }
+            }
+        }
        
         //draw our particles
+        //for (unsigned int i = 0; i < num_particles; i++)
+        //{
 
+        //    // particles.densities[i] = particles.CalcDensity(particles.positions[i]);
+        //   // particles.velocities[i] += glm::vec3(0, -gravity, 0);
+        //}
+        for (unsigned int i = 0; i < num_particles; i++)
+        {
+            
+            particles.densities[i] = particles.CalcDensity(particles.positions[i]);
+            //std::cout << particles.densities[i] << "\n";
+            particles.velocities[i] += glm::vec3(0, -gravity * timestep_,0);
+        }
         for (unsigned int i = 0; i < num_particles; i++)
         {   
             
@@ -348,34 +392,33 @@ int main()
             glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
 
 
-            std::random_device rd;
-            std::mt19937 gen(rd()); // Mersenne Twister engine seeded
+            //std::random_device rd;
+            //std::mt19937 gen(rd()); // Mersenne Twister engine seeded
 
-            // Define ranges for each float
-            std::uniform_real_distribution<float> dist_x(-1, 1);
-            std::uniform_real_distribution<float> dist_y(-1, 1);
-            std::uniform_real_distribution<float> dist_z(-1, 1);
+            //// Define ranges for each float
+            //std::uniform_real_distribution<float> dist_x(-1, 1);
+            //std::uniform_real_distribution<float> dist_y(-1, 1);
+            //std::uniform_real_distribution<float> dist_z(-1, 1);
 
-            // Generate random values
-            float x = dist_x(gen);
-            float y = dist_y(gen);
-            float z = dist_z(gen);
+            //// Generate random values
+            //float x = dist_x(gen);
+            //float y = dist_y(gen);
+            //float z = dist_z(gen);
 
-            glm::vec3 randDir(x, y, z);
+            //glm::vec3 randDir(x, y, z);
 
-            float density = particles.CalcDensity(particles.positions[i]);
-            particles.densities[i] = density;
-            float magnitude = sqrt(particles.mass * density);
-            particles.velocities[i] += (magnitude * randDir);
+   
+            //float magnitude = sqrt(particles.mass * density);
+            //particles.velocities[i] += (magnitude * randDir);
 
-            //glm::vec3 pressureForce = particles.CalcPressureForce(particles.positions[i]);
-            //glm::vec3 pressureAcceleration = pressureForce;// particles.densities[i];
-
-            //particles.velocities[i] += pressureAcceleration * timestep_;
+            glm::vec3 pressureForce = particles.CalcPressureForce(particles.positions[i]);
+            glm::vec3 pressureAcceleration = pressureForce / particles.densities[i];
+            particles.velocities[i] += pressureAcceleration;
 
             //std::cout << "vs" <<(particles.velocities[i].x) << "\n";
             particles.positions[i] += particles.velocities[i] * 0.010f * timestep_;
             particles.check_collision(-bounding_box.x/2, bounding_box.x / 2, -bounding_box.y / 2, bounding_box.y / 2, -bounding_box.z / 2, bounding_box.z / 2, i);
+            particles.check_particle_collision(i);
             //particle must recieve force that is in the opposite direction its going
             //direction is just normalized velocity so take that and multiply it by force magnitude. force is the density at that point for now
             // new velocity = f = ma then sqrt (f/m)?
@@ -387,7 +430,7 @@ int main()
             model = glm::translate(model, particles.positions[i]);
             model = glm::scale(model, glm::vec3(particle_size, particle_size, particle_size));
             
-            glm::vec3 heat = particles.heatmap(5, 10, density);
+            glm::vec3 heat = particles.heatmap(minDense, maxDense, particles.densities[i]);
             //float angle = 20.0f * i + (float)glfwGetTime() * 50.0f; // Add rotation over time
             //model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
             ourShader.setMat4("model", model);
