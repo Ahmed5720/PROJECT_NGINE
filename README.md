@@ -1,1 +1,1 @@
-Fluid simulation in OpenGL and Cuda.
+SPH Fluid simulation in OpenGL
