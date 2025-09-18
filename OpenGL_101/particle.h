@@ -231,6 +231,11 @@ public:
     }
 
 
+    struct Particle
+    {
+        glm::vec4 pos;
+        glm::vec4 vel;
+    };
     /* 
     Currently for each particle we check every other particle against it to compute the density and the pressure force.
     we can avoid that by using a hashgrid such that instead of searching the entire set of particles. we only check particles in a given cell
@@ -268,20 +273,8 @@ public:
 
         //TO DO parallel sort
         std::sort(gridmap.begin(), gridmap.end());
-        //find starting indices
-        
-        /*int last = -1;
-        int cell = 0;
-        for (int particle = 0; particle < gridmap.size(); particle++)
-        {
-            if (gridmap[particle].first != last)
-            {
-                last = gridmap[particle].first;
-                startingIdxs[cell] = particle;
-                cell++;
-            }
-        }*/
 
+        //find starting indices
         startingIdxs.assign(n_cells, -1);
 
         int prev = -1;
@@ -384,6 +377,7 @@ public:
         }
                 return ranges;
     }
+    //DEBUG
     void printGridMap(const std::vector<std::pair<int, int>>& gridmap,
         const std::vector<glm::vec3>& points)
     {
@@ -397,6 +391,8 @@ public:
                 << " (" << pos.x << ", " << pos.y << ", " << pos.z << ")\n";
         }
     }
+
+    // remove
     void check_particle_collision(int id)
     {
         for (int i = 0; i < positions.size(); i++) {
@@ -485,5 +481,14 @@ public:
         }
     }
 
-  
+    //void createAndBindStorageBuffers()
+    //{
+    //    Gluint particleBuffer;
+    //    glGenBuffers(1, &particleBuffer);
+    //    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+    //    glBufferData(GL_SHADER_STORAGE_BUFFER, num_particles * sizeof(Particle), NULL, GL_DYNAMIC_DRAW); // dynamic draw means data will transfer frequently between cpu/gpu
+    //    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer); // binding start pos = 0. ie layout(binding = 0)
+    //    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0); // unbind 
+    //    
+    //}
 };

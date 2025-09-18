@@ -17,7 +17,7 @@
 #include <random>
 
 
-
+//#include "ComputeShader.h"
 #include "Shader.h"
 #include "camera.h"
 #include "particle.h"
@@ -158,7 +158,7 @@ int main()
     // glfw: initialize and configure
     // ------------------------------
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 
    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
@@ -214,8 +214,8 @@ int main()
 
     // build and compile our shader zprogram
     // ------------------------------------
-    Shader ourShader("shaders/shader.vs", "shaders/shader.fs", "shaders / shader.cs");
-
+    Shader ourShader("shaders/shader.vs", "shaders/shader.fs","shaders/shader.cs" );
+   // ComputeShader computeShader("shaders / shader.cs");
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
@@ -451,7 +451,7 @@ int main()
             //std::cout << "vs" <<(particles.velocities[i].x) << "\n";
             particles.positions[i] += particles.velocities[i] * timestep_ * deltaTime;
             particles.check_collision(-bounding_box.x/2, bounding_box.x / 2, -bounding_box.y / 2, bounding_box.y / 2, -bounding_box.z / 2, bounding_box.z / 2, i);
-           // particles.check_particle_collision(i);
+        
             
             
             model = glm::translate(model, particles.positions[i]);
@@ -460,10 +460,7 @@ int main()
             glm::vec3 heat = particles.heatmap(minSpeed, maxSpeed, glm::length(particles.velocities[i]));
             glm::vec3 positional_color = particles.getCellCoords({ particles.predictedPositions[i] / float(particles.n_cells_x) });
 
-            
-           // printf("predicted positions %d \n", particles.predictedPositions[i].x);
-            //float angle = 20.0f * i + (float)glfwGetTime() * 50.0f; // Add rotation over time
-            //model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+   
 
             /*
             std::unordered_set<int> highlightNeighbors;
