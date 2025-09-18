@@ -24,7 +24,8 @@
 
 #include <vector>
 #include <iostream>
-
+#include <unordered_set>
+#include <omp.h>
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -45,12 +46,12 @@ bool firstMouse = true;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-int num_particles = 400;
-float timestep_ = 1.0f;
-float particle_size = 0.1f;
+int num_particles = 1000;
+float timestep_ = 0.0f;
+float particle_size = 0.10f;
 float gravity = 9.8f;
-float minDense = 1, maxDense = 5;
-glm::vec3 bounding_box = glm::vec3(5, 5, 5);
+float minSpeed = 0, maxSpeed = 10;
+glm::vec3 bounding_box = glm::vec3(8, 8, 8);
 
 
 
@@ -58,9 +59,7 @@ bool show_settings = true;
 bool vsync_enabled = true;
 bool mouse_captured = true;
 
-std::vector<float> particlePositions_x;
-std::vector<float> particlePositions_y;
-std::vector<float> particlePositions_z;
+
 
 
 
@@ -70,23 +69,88 @@ void gen_particle_positions(particle& particles)
     for (unsigned int i = 0; i < num_particles; i++)
     {
 
-        std::random_device rd;
-        std::mt19937 gen(rd()); // Mersenne Twister engine seeded
+        //std::random_device rd;
+        //std::mt19937 gen(rd()); // Mersenne Twister engine seeded
 
-        // Define ranges for each float
-        std::uniform_real_distribution<float> dist_x(-bounding_box.x / 2, bounding_box.x / 2);
-        std::uniform_real_distribution<float> dist_y(-bounding_box.y / 2, bounding_box.y / 2);
-        std::uniform_real_distribution<float> dist_z(-bounding_box.z / 2, bounding_box.z / 2);
+        //// Define ranges for each float
+        //std::uniform_real_distribution<float> dist_x(-bounding_box.x / 2, bounding_box.x / 2);
+        //std::uniform_real_distribution<float> dist_y(-bounding_box.y / 2, bounding_box.y / 2);
+        //std::uniform_real_distribution<float> dist_z(-bounding_box.z / 2, bounding_box.z / 2);
 
-        // Generate random values
-        float x = dist_x(gen);
-        float y = dist_y(gen);
-        float z = dist_z(gen);
+        //// Generate random values
+        //float x = dist_x(gen);
+        //float y = dist_y(gen);
+        //float z = dist_z(gen);
+
+        int size_x = static_cast<int>(bounding_box.x);
+        int size_y = static_cast<int>(bounding_box.y);
+        int size_z = static_cast<int>(bounding_box.z);
+
+        int x = i % size_x - (bounding_box.x/2);
+        int y = (i / size_x) % size_y - (bounding_box.y / 2);
+        int z = i / (size_x * size_y) - (bounding_box.z / 2);
 
         particles.positions.push_back(glm::vec3(x, y, z));
+      //  std::cout << "cell coord " << x << " " << y << " " << z << "\n";
+        particles.predictedPositions.push_back(glm::vec3(x, y, z));
         particles.velocities.push_back(glm::vec3(0));
         particles.densities.push_back(0);
 
+    }
+}
+
+
+struct IVec3Hash {
+    std::size_t operator()(const glm::ivec3& v) const noexcept {
+        return ((std::hash<int>()(v.x) ^ (std::hash<int>()(v.y) << 1)) >> 1)
+            ^ (std::hash<int>()(v.z) << 1);
+    }
+};
+
+struct IVec3Equal {
+    bool operator()(const glm::ivec3& a, const glm::ivec3& b) const noexcept {
+        return a.x == b.x && a.y == b.y && a.z == b.z;
+    }
+};
+
+void printCellCoordCounts(const std::vector<glm::vec3>& positions,
+    particle& particles)
+{
+    std::unordered_map<glm::ivec3, int, IVec3Hash, IVec3Equal> cellCounts;
+
+    for (const auto& p : positions) {
+        glm::ivec3 cell = particles.getCellCoords(p);
+        cellCounts[cell]++;
+    }
+
+    std::cout << "Cell coordinate counts:\n";
+    for (const auto& kv : cellCounts) {
+        const glm::ivec3& c = kv.first;
+        int count = kv.second;
+        std::cout << "(" << c.x << ", " << c.y << ", " << c.z << ") -> " << count << "\n";
+    }
+}
+
+
+void computeMinMaxCellCoords(const std::vector<glm::vec3>& positions,
+    glm::ivec3& minCell,
+    glm::ivec3& maxCell,
+    particle& particles)
+{
+    // Initialize to extreme values
+    minCell = glm::ivec3(INT_MAX);
+    maxCell = glm::ivec3(INT_MIN);
+
+    for (const auto& p : positions) {
+        glm::ivec3 cell = particles.getCellCoords(p);
+
+        minCell.x = std::min(minCell.x, cell.x);
+        minCell.y = std::min(minCell.y, cell.y);
+        minCell.z = std::min(minCell.z, cell.z);
+
+        maxCell.x = std::max(maxCell.x, cell.x);
+        maxCell.y = std::max(maxCell.y, cell.y);
+        maxCell.z = std::max(maxCell.z, cell.z);
     }
 }
 int main()
@@ -150,7 +214,7 @@ int main()
 
     // build and compile our shader zprogram
     // ------------------------------------
-    Shader ourShader("shaders/shader.vs", "shaders/shader.fs");
+    Shader ourShader("shaders/shader.vs", "shaders/shader.fs", "shaders / shader.cs");
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -267,7 +331,7 @@ int main()
             ImGui::Separator();
 
             // Particle settings
-            ImGui::SliderInt("Number of Particles", &num_particles, 1, 1000);
+            ImGui::SliderInt("Number of Particles", &num_particles, 1, 500);
          
             ImGui::SliderFloat("Particle Size", &particle_size, 0.1, 5.0f);
 
@@ -276,10 +340,11 @@ int main()
             ImGui::SliderFloat("Target Density ", &particles.targetDensity, -100, 100.0f);
             ImGui::SliderFloat("Pressure Multiplier ", &particles.pressureMultiplier, 0, 10.0f);
             ImGui::SliderFloat("damping", &particles.damping, 0, 10.0f);
-            ImGui::SliderFloat("gravity", &gravity, 0, 10.0f);
-            ImGui::SliderFloat("minDense", &minDense, -100, 100.0f);
-            ImGui::SliderFloat("maxDense", &maxDense, -100, 100.0f);
+            ImGui::SliderFloat("gravity", &gravity, 0, 100.0f);
+            ImGui::SliderFloat("minSpeed", &minSpeed, -100, 100.0f);
+            ImGui::SliderFloat("maxSpeed", &maxSpeed, -100, 100.0f);
             ImGui::SliderFloat("particle collider", &particles.min_dist, 0.1, 10.0f);
+            ImGui::SliderInt("select particle", &particles.highlightIdx, 0, 500);
 
             ImGui::SliderFloat("timestep", &timestep_, 0, 10.0f);
             // Bounding box settings
@@ -348,91 +413,87 @@ int main()
         ourShader.setVec3("color", glm::vec3(1,1,1));
         glDrawArrays(GL_LINES, 0, 36);
 
-        glm::vec3 boxSize = bounding_box; // dimensions of bounding box
-        for (int x = 0; x < (int)boxSize.x; x++) {
-            for (int y = 0; y < (int)boxSize.y; y++) {
-                for (int z = 0; z < (int)boxSize.z; z++) {
+        glm::vec3 boxSize = bounding_box;
+        particles.bbox = boxSize;
 
-                    glm::mat4 model = glm::mat4(1.0f);
-
-                    // translate cube to grid position
-                    model = glm::translate(model, glm::vec3(x - boxSize.x/2, y - boxSize.y/2, z - boxSize.z/2 ));
-
-                    // scale to unit cube (side length = 1)
-                    model = glm::scale(model, glm::vec3(1.0f));
-
-                    // set uniforms
-                    ourShader.setMat4("model", model);
-                    ourShader.setVec3("color", glm::vec3(1, 1, 1));
-
-                    // draw cube as wireframe
-                    glDrawArrays(GL_LINES, 0, 36);
-                }
-            }
-        }
+        
+ 
        
         //draw our particles
-        //for (unsigned int i = 0; i < num_particles; i++)
-        //{
-
-        //    // particles.densities[i] = particles.CalcDensity(particles.positions[i]);
-        //   // particles.velocities[i] += glm::vec3(0, -gravity, 0);
-        //}
-        for (unsigned int i = 0; i < num_particles; i++)
+        //#pragma omp parallel for
+        for (int i = 0; i < num_particles; i++)
         {
-            
-            particles.densities[i] = particles.CalcDensity(particles.positions[i]);
-            //std::cout << particles.densities[i] << "\n";
-            particles.velocities[i] += glm::vec3(0, -gravity * timestep_,0);
+            particles.velocities[i] += glm::vec3(0, -gravity * timestep_ * deltaTime , 0);
+            particles.predictedPositions[i] = particles.positions[i] + particles.velocities[i] * timestep_ * deltaTime;
         }
-        for (unsigned int i = 0; i < num_particles; i++)
+        particles.updateSpatialHashgrid(particles.predictedPositions, bounding_box, particles.smoothingRadius);
+        //#pragma omp parallel for
+        for (int i = 0; i < num_particles; i++)
+        {
+           
+            particles.densities[i] = particles.CalcDensity(particles.predictedPositions[i]);
+         
+        }
+
+        //#pragma omp parallel for
+        for (int i = 0; i < num_particles; i++)
         {   
             
             // calculate the model matrix for each object and pass it to shader before drawing
             glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
 
+           
 
-            //std::random_device rd;
-            //std::mt19937 gen(rd()); // Mersenne Twister engine seeded
-
-            //// Define ranges for each float
-            //std::uniform_real_distribution<float> dist_x(-1, 1);
-            //std::uniform_real_distribution<float> dist_y(-1, 1);
-            //std::uniform_real_distribution<float> dist_z(-1, 1);
-
-            //// Generate random values
-            //float x = dist_x(gen);
-            //float y = dist_y(gen);
-            //float z = dist_z(gen);
-
-            //glm::vec3 randDir(x, y, z);
-
-   
-            //float magnitude = sqrt(particles.mass * density);
-            //particles.velocities[i] += (magnitude * randDir);
-
-            glm::vec3 pressureForce = particles.CalcPressureForce(particles.positions[i]);
+            glm::vec3 pressureForce = particles.CalcPressureForce(i);
             glm::vec3 pressureAcceleration = pressureForce / particles.densities[i];
             particles.velocities[i] += pressureAcceleration;
 
             //std::cout << "vs" <<(particles.velocities[i].x) << "\n";
-            particles.positions[i] += particles.velocities[i] * 0.010f * timestep_;
+            particles.positions[i] += particles.velocities[i] * timestep_ * deltaTime;
             particles.check_collision(-bounding_box.x/2, bounding_box.x / 2, -bounding_box.y / 2, bounding_box.y / 2, -bounding_box.z / 2, bounding_box.z / 2, i);
-            particles.check_particle_collision(i);
-            //particle must recieve force that is in the opposite direction its going
-            //direction is just normalized velocity so take that and multiply it by force magnitude. force is the density at that point for now
-            // new velocity = f = ma then sqrt (f/m)?
-            // position just += velocity * timestep?
-                // since d/t = v therefore d = vt
-            //and then update positions directly with that.
-            // but at first velocity is 
+           // particles.check_particle_collision(i);
+            
             
             model = glm::translate(model, particles.positions[i]);
             model = glm::scale(model, glm::vec3(particle_size, particle_size, particle_size));
             
-            glm::vec3 heat = particles.heatmap(minDense, maxDense, particles.densities[i]);
+            glm::vec3 heat = particles.heatmap(minSpeed, maxSpeed, glm::length(particles.velocities[i]));
+            glm::vec3 positional_color = particles.getCellCoords({ particles.predictedPositions[i] / float(particles.n_cells_x) });
+
+            
+           // printf("predicted positions %d \n", particles.predictedPositions[i].x);
             //float angle = 20.0f * i + (float)glfwGetTime() * 50.0f; // Add rotation over time
             //model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+
+            /*
+            std::unordered_set<int> highlightNeighbors;
+
+            if (particles.highlightIdx >= 0 && particles.highlightIdx < num_particles) {
+                auto range = particles.getParticlesInCellByIndex(particles.highlightIdx);
+                printf("selection staert end %d %d \n", range.first, range.second);
+                auto neighborRanges = particles.get3x3CellParticles(
+                    particles.predictedPositions[particles.highlightIdx]);
+                   for (auto range : neighborRanges) {
+                    
+                    for (int i = range.first; i < range.second; i++) {
+                        int pid = particles.gridmap[i].second;
+                        highlightNeighbors.insert(pid);
+                    }
+                }
+            }
+
+
+            
+            glm::vec3 color(0,0,0);
+            if (i == particles.highlightIdx) {
+                color = glm::vec3(0.0f, 0.0f, 1.0f);   // blue for the selected particle
+            }
+            else if (highlightNeighbors.find(i) != highlightNeighbors.end()) {
+                color = glm::vec3(0.0f, 1.0f, 0.0f);   // red for its neighbors
+            }
+
+            */
+
             ourShader.setMat4("model", model);
             ourShader.setVec3("color", heat);
             particles.renderSphere();
@@ -440,6 +501,15 @@ int main()
 
           
         }
+
+        /*glm::ivec3 minCell, maxCell;
+        computeMinMaxCellCoords(particles.predictedPositions, minCell, maxCell, particles);
+
+        std::cout << "Min cell: " << minCell.x << " " << minCell.y << " " << minCell.z << "\n";
+        std::cout << "Max cell: " << maxCell.x << " " << maxCell.y << " " << maxCell.z << "\n";*/
+
+       // printCellCoordCounts(particles.predictedPositions, particles);
+        
 
         // Render ImGui
         ImGui::Render();
