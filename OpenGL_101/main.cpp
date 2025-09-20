@@ -17,7 +17,7 @@
 #include <random>
 
 
-//#include "ComputeShader.h"
+#include "ComputeShader.h"
 #include "Shader.h"
 #include "camera.h"
 #include "particle.h"
@@ -214,8 +214,8 @@ int main()
 
     // build and compile our shader zprogram
     // ------------------------------------
-    Shader ourShader("shaders/shader.vs", "shaders/shader.fs","shaders/shader.cs" );
-   // ComputeShader computeShader("shaders / shader.cs");
+    Shader shader("shaders/shader.vs", "shaders/shader.fs" );
+
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
@@ -296,8 +296,16 @@ int main()
 
     gen_particle_positions(particles);
     
-    ourShader.use();
-  
+    //frag and vertex shaders setup
+    shader.use();
+
+
+    //compute shader
+    ComputeShader compute_shader("Shader.cs", glm::uvec2(10, 1));
+
+    compute_shader.use();
+    float values[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    compute_shader.set_values(values);
 
 
     // render loop
@@ -314,6 +322,18 @@ int main()
         // -----
         processInput(window);
 
+
+
+        //compute shader update
+        compute_shader.use();
+        compute_shader.dispatch();
+        compute_shader.wait();
+
+        auto data = compute_shader.get_values();
+        for (auto d : data) {
+            std::cout << d << " ";
+        }
+        std::cout << std::endl;
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -391,15 +411,15 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // activate shader
-        ourShader.use();
+        shader.use();
 
         // pass projection matrix to shader (note that in this case it could change every frame)
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
-        ourShader.setMat4("projection", projection);
+        shader.setMat4("projection", projection);
 
         // camera/view transformation
         glm::mat4 view = camera.GetViewMatrix();
-        ourShader.setMat4("view", view);
+        shader.setMat4("view", view);
 
         // render boxes
         glBindVertexArray(VAO);
@@ -409,16 +429,19 @@ int main()
         model = glm::scale(model, bounding_box);
         //float angle = 20.0f * i + (float)glfwGetTime() * 50.0f; // Add rotation over time
         //model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
-        ourShader.setMat4("model", model);
-        ourShader.setVec3("color", glm::vec3(1,1,1));
+        shader.setMat4("model", model);
+        shader.setVec3("color", glm::vec3(1,1,1));
         glDrawArrays(GL_LINES, 0, 36);
 
         glm::vec3 boxSize = bounding_box;
         particles.bbox = boxSize;
 
         
- 
+        
        
+
+
+
         //draw our particles
         //#pragma omp parallel for
         for (int i = 0; i < num_particles; i++)
@@ -491,8 +514,8 @@ int main()
 
             */
 
-            ourShader.setMat4("model", model);
-            ourShader.setVec3("color", heat);
+            shader.setMat4("model", model);
+            shader.setVec3("color", heat);
             particles.renderSphere();
             //glDrawArrays(GL_TRIANGLES, 0, 36);
 

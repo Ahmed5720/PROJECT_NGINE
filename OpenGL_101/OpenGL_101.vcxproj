@@ -454,6 +454,7 @@
     <ClInclude Include="Dependencies\KHR\khrplatform.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="particle.h" />
+    <ClInclude Include="ComputeShader.h" />
     <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <ItemGroup>

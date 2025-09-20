@@ -24,6 +24,6 @@ C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(91,15): warning C4244:         with
 C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(91,15): warning C4244:         [
 C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(91,15): warning C4244:             T=float
 C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(91,15): warning C4244:         ]
-C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(336,65): warning C4305: 'argument': truncation from 'double' to 'float'
-C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(346,74): warning C4305: 'argument': truncation from 'double' to 'float'
+C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(356,65): warning C4305: 'argument': truncation from 'double' to 'float'
+C:\Dev\PROJECT_NGINE\OpenGL_101\main.cpp(366,74): warning C4305: 'argument': truncation from 'double' to 'float'
   OpenGL_101.vcxproj -> C:\Dev\PROJECT_NGINE\x64\Debug\OpenGL_101.exe
