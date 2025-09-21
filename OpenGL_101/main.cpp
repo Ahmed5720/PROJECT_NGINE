@@ -308,6 +308,8 @@ int main()
     compute_shader.set_values(values);
 
 
+
+
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -438,9 +440,15 @@ int main()
 
         
         
-       
+       // with the compute shader we should run a few dispatches as follows:
 
+        Dispatch(compute, PosiitonBuffer.count, externalForcesKernel);
+        Dispatch(compute, PosiitonBuffer.count, spatialHashKernel);
+        spatialHash.Run();
+        Dispatch(compute, PosiitonBuffer.count, reorderKernel);
 
+        Dispatch(compute, PosiitonBuffer.count, densityKernel);
+        Dispatch(compute, PosiitonBuffer.count, pressureKernel);
 
         //draw our particles
         //#pragma omp parallel for

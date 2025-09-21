@@ -1,4 +1,8 @@
-#version 430
+# version 430
+// this compute shader combines all the different kernels and uses a uniform to select between them
+
+layout(local_size_x = NUM_THREADS, local_size_y = 1, local_size_z = 1) in;
+uniform int kernelSelector;
 
 const int NUM_THREADS = 64;
 
@@ -35,4 +39,19 @@ layout(std140, binding = 0) uniform SimulationParams
     //float edgeForceDst;
     vec3 boundingBox;
     vec3 center;
+};
+
+
+
+void external_forces()
+{
+	uint index = gl_GlobalInvocationID.x;
+	if(index >= numParticles) return;
+
+	velocities[index] += vec3(0.0, gravity, 0.0) * deltaTime;
+	predictedPositions[index] = positions[index] + velocities[index] * (1.0 / 120.0); 
+}
+void main()
+{
+
 }

@@ -597,9 +597,15 @@
     <None Include="Dependencies\include\glm\gtx\vector_angle.inl" />
     <None Include="Dependencies\include\glm\gtx\vector_query.inl" />
     <None Include="Dependencies\include\glm\gtx\wrap.inl" />
+    <None Include="shaders\calculate_densities.comp" />
+    <None Include="shaders\calculate_pressure.comp" />
+    <None Include="shaders\common.glsl" />
+    <None Include="shaders\external_forces.comp" />
     <None Include="shaders\shader.cs" />
     <None Include="shaders\shader.fs" />
     <None Include="shaders\shader.vs" />
+    <None Include="shaders\update_positions.comp" />
+    <None Include="shaders\update_spatial_hash.comp" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="Dependencies\GLFW\lib-vc2022\glfw3.lib" />

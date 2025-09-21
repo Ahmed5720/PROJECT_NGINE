@@ -18,7 +18,6 @@ public:
     ComputeShader(const char* computePath, glm::uvec2 size)
     {
         work_size = size;
-        // 1. retrieve the vertex/fragment source code from filePath
  
         std::string computeCode;
         std::ifstream cShaderFile;
