@@ -1,3 +1,7 @@
+
+![Alt text](media/psimsnap.png "simulation")
+
+
 In this project we created a fluid simulation using smoothed particle hydrodynamics. 
 based on this paper:
 
@@ -16,4 +20,4 @@ spatialOffsets Buffer: [0,3,5,9]
 
 This structures allows us to efficiently indix into any particle. furthermore this implementation is perfectly suitable to be used in a GPU kernel.
 
-![Alt text](resources/spatialgrid.png "spatial grid")
+![Alt text](media/spatialgrid.png "spatial grid")
