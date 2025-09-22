@@ -60,6 +60,15 @@ bool vsync_enabled = true;
 bool mouse_captured = true;
 
 
+//kernel IDs
+const int externalForcesKernel = 0;
+const int spatialHashKernel = 1;
+const int reorderKernel = 2;
+const int densityKernel = 4;
+const int pressureKernel = 5;
+const int updatePositionsKernel = 7;
+//const int renderKernel = 8;
+
 
 
 
@@ -331,11 +340,11 @@ int main()
         compute_shader.dispatch();
         compute_shader.wait();
 
-        auto data = compute_shader.get_values();
+      /*  auto data = compute_shader.get_values();
         for (auto d : data) {
             std::cout << d << " ";
         }
-        std::cout << std::endl;
+        std::cout << std::endl;*/
 
         // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -442,13 +451,13 @@ int main()
         
        // with the compute shader we should run a few dispatches as follows:
 
-        Dispatch(compute, PosiitonBuffer.count, externalForcesKernel);
+     /*   Dispatch(compute, PositonBuffer.count, externalForcesKernel);
         Dispatch(compute, PosiitonBuffer.count, spatialHashKernel);
         spatialHash.Run();
         Dispatch(compute, PosiitonBuffer.count, reorderKernel);
 
         Dispatch(compute, PosiitonBuffer.count, densityKernel);
-        Dispatch(compute, PosiitonBuffer.count, pressureKernel);
+        Dispatch(compute, PosiitonBuffer.count, pressureKernel);*/
 
         //draw our particles
         //#pragma omp parallel for

@@ -279,9 +279,9 @@ public:
 
         int prev = -1;
         for (int i = 0; i < (int)gridmap.size(); ++i) {
-            int cid = gridmap[i].first;         // true cell id
+            int cid = gridmap[i].first;         
             if (cid != prev) {
-                startingIdxs[cid] = i;          // write to the real cell id
+                startingIdxs[cid] = i;          
                 prev = cid;
             }
         }

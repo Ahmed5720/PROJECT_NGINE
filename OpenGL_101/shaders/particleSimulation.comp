@@ -51,6 +51,52 @@ void external_forces()
 	velocities[index] += vec3(0.0, gravity, 0.0) * deltaTime;
 	predictedPositions[index] = positions[index] + velocities[index] * (1.0 / 120.0); 
 }
+
+void calculate_densities()
+{
+	
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= particleCount) return;
+
+
+    for (int i = 0; i < 27; i++)
+    {
+    
+    }
+    vec3 p = predictedPositions[idx].xyz;
+    float density = 0;
+    //  int i = 0;
+    std::vector<std::pair<int, int>> ranges = get3x3CellParticles(p);
+    std::pair<int, int> start_end;
+    start_end = getParticlesInCell(p);
+    for (std::pair<int, int> start_end : ranges)
+    {
+        for (int i = start_end.first; i < start_end.second; i++)
+        // for (const glm::vec3 pos : predictedPositions)
+        {   
+            int particleIdx = gridmap[i].second;
+            glm::vec3 pos = predictedPositions[particleIdx];
+        //     glm::vec3 pos = predictedPositions[i];
+            float dst = glm::distance(pos, p);
+            density += mass * smoothingKernel(smoothingRadius, dst);
+    
+        }
+    }
+
+
+}
+void check_collision()
+{
+	
+}
+void calculate_pressure()
+{
+
+}
+void update_positions()
+{
+
+}
 void main()
 {
 

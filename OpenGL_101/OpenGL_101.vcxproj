@@ -24,6 +24,7 @@
     <ProjectGuid>{5fe2f743-9f39-49a3-9864-199e6c5c4df0}</ProjectGuid>
     <RootNamespace>OpenGL101</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>PROJECT_ENGINE</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -601,6 +602,7 @@
     <None Include="shaders\calculate_pressure.comp" />
     <None Include="shaders\common.glsl" />
     <None Include="shaders\external_forces.comp" />
+    <None Include="shaders\particleSimulation.comp" />
     <None Include="shaders\shader.cs" />
     <None Include="shaders\shader.fs" />
     <None Include="shaders\shader.vs" />

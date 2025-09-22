@@ -1406,6 +1406,7 @@
     <None Include="shaders\update_spatial_hash.comp" />
     <None Include="shaders\common.glsl" />
     <None Include="shaders\external_forces.comp" />
+    <None Include="shaders\particleSimulation.comp" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="Dependencies\GLFW\lib-vc2022\glfw3_mt.lib" />
