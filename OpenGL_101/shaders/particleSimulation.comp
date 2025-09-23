@@ -7,23 +7,39 @@ uniform int kernelSelector;
 const int NUM_THREADS = 64;
 
 //buffer bindings
-layout(std430, binding = 0) restrict buffer PositionBuffer
+layout(std430, binding = 1) restrict buffer PositionBuffer
 {
 	vec3 positions[];
 };
 
-layout(std430, binding = 1) restrict buffer PredictedPositionBuffer
+layout(std430, binding = 2) restrict buffer PredictedPositionBuffer
 {
 	vec3 predictedPositions[];
 };
-layout(std430, binding = 1) restrict buffer VelocityBuffer
+layout(std430, binding = 3) restrict buffer VelocityBuffer
 {
 	vec3 velocities[];
 };
-layout(std430, binding = 1) restrict buffer DensityBuffer
+layout(std430, binding = 4) restrict buffer DensityBuffer
 {
 	vec3 densities[];
 };
+
+// Spatial hashing
+layout(std430, binding = 5) restrict buffer SpatialKeysBuffer
+{
+	uint SpatialKeys[];
+};
+layout(std430, binding = 6) restrict buffer SpatialOffsetsBuffer
+{
+	uint SpatialOffsets[];
+};
+layout(std430, binding = 7) restrict buffer SortedIndicesBuffer
+{
+	uint SortedIndices[];
+};
+
+
 
 layout(std140, binding = 0) uniform SimulationParams 
 {
@@ -33,6 +49,7 @@ layout(std140, binding = 0) uniform SimulationParams
 	float collisionDamping;
 	float targetDensity;
 	float pressureMultiplier;
+	float smoothingRadius;
     // float nearPressureMultiplier
 	// float viscosityStrength
 	//float edgeForce;
@@ -52,39 +69,134 @@ void external_forces()
 	predictedPositions[index] = positions[index] + velocities[index] * (1.0 / 120.0); 
 }
 
-void calculate_densities()
+const ivec3 offsets3D[27] =
 {
-	
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= particleCount) return;
+	ivec3(-1, -1, -1),
+	ivec3(0, -1, -1),
+	ivec3(1, -1, -1),
+
+	ivec3(-1, 0, -1),
+	ivec3(0, 0, -1),
+	ivec3(1, 0, -1),
+
+	ivec3(-1, 1, -1),
+	ivec3(0, 1, -1),
+	ivec3(1, 1, -1),
+
+	ivec3(-1, -1, 0),
+	ivec3(0, -1, 0),
+	ivec3(1, -1, 0),
+
+	ivec3(-1, 0, 0),
+	ivec3(0, 0, 0),
+	ivec3(1, 0, 0),
+
+	ivec3(-1, 1, 0),
+	ivec3(0, 1, 0),
+	ivec3(1, 1, 0),
+
+	ivec3(-1, -1, 1),
+	ivec3(0, -1, 1),
+	ivec3(1, -1, 1),
+
+	ivec3(-1, 0, 1),
+	ivec3(0, 0, 1),
+	ivec3(1, 0, 1),
+
+	ivec3(-1, 1, 1),
+	ivec3(0, 1, 1),
+	ivec3(1, 1, 1)
+};
+const uint hashK1 = 15823;
+const uint hashK2 = 9737333;
+const uint hashK3 = 440817757;
+
+
+uint HashCell3D(ivec3 cell)
+{
+    const ivec3 blockSize = ivec3(50,50,50);
+    ivec3 ucell = ivec3(cell + blockSize / 2);
+
+    ivec3 localCell = ucell.x % blockSize;
+    ivec3 blockID = ucell / blockSize;
+    
+    uint blockHash = blockID.x * hashK1 + blockID.y * hashK2 + blockID.z * hashK3;
+
+    return localCell.x + blockSize.x * (localCell.y + blockSize.x * localCell.z) + blockHash;
+}
+
+uint KeyFromHash(uint hash, uint tableSize)
+{
+	return hash % tableSize;
+}
+ivec3 getCell3D(vec3 position , float radius)
+{
+	return ivec3(floor(position/ radius));
+}
+
+float DensityKernel(float dst, float Rad)
+{
+
+	return 0;
+}
+float NearDensityKernel(float dst, float Rad)
+{
+
+	return 0;
+}
+vec2 calculate_density_at_pos(vec3 pos)
+{	
+
+	ivec3 currentCell = getCell3D(pos, smoothingRadius);
+	float sqrRad = smoothingRadius * smoothingRadius;
+	float density = 0;
+	float nearDensity = 0;
+
+   
 
 
     for (int i = 0; i < 27; i++)
     {
-    
+        uint hash = HashCell3D(currentCell + offsets3D[i]);
+		uint key = KeyFromHash(hash, numParticles);
+		uint currIdx = SpatialOffsets[key];
+
+		while(currIdx < numParticles)
+		{
+			uint neighbourIndex = currIdx;
+			currIdx++;
+
+			uint neighbourKey = SpatialKeys[neighbourIndex];
+			if(neighbourKey != key)
+				break;
+			vec3 neighbourPos = predictedPositions[neighbourIndex];
+			vec3 offsetToNeighbour = neighbourPos - pos;
+			float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
+
+			if (sqrDstToNeighbour > sqrRad)
+				continue;
+
+			float dst = sqrt(sqrDstToNeighbour);
+			density += DensityKernel(dst, smoothingRadius);
+			nearDensity += NearDensityKernel(dst, smoothingRadius);
+			
+		}
     }
-    vec3 p = predictedPositions[idx].xyz;
-    float density = 0;
-    //  int i = 0;
-    std::vector<std::pair<int, int>> ranges = get3x3CellParticles(p);
-    std::pair<int, int> start_end;
-    start_end = getParticlesInCell(p);
-    for (std::pair<int, int> start_end : ranges)
-    {
-        for (int i = start_end.first; i < start_end.second; i++)
-        // for (const glm::vec3 pos : predictedPositions)
-        {   
-            int particleIdx = gridmap[i].second;
-            glm::vec3 pos = predictedPositions[particleIdx];
-        //     glm::vec3 pos = predictedPositions[i];
-            float dst = glm::distance(pos, p);
-            density += mass * smoothingKernel(smoothingRadius, dst);
-    
-        }
-    }
+
+	return vec2(density, nearDensity);
 
 
 }
+
+void calc_densities()
+{
+	uint idx = gl_GlobalInvocationID.x;
+    if (idx >= numParticles) return;
+
+	vec3 position = predictedPositions[idx];
+	calculate_density_at_pos(position);
+}
+
 void check_collision()
 {
 	
