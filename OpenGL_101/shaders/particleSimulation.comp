@@ -22,19 +22,23 @@ layout(std430, binding = 3) restrict buffer VelocityBuffer
 };
 layout(std430, binding = 4) restrict buffer DensityBuffer
 {
-	vec3 densities[];
+	float densities[];
+};
+layout(std430, binding = 5) restrict buffer nearDensityBuffer
+{
+	float nearDensities[];
 };
 
 // Spatial hashing
-layout(std430, binding = 5) restrict buffer SpatialKeysBuffer
+layout(std430, binding = 6) restrict buffer SpatialKeysBuffer
 {
 	uint SpatialKeys[];
 };
-layout(std430, binding = 6) restrict buffer SpatialOffsetsBuffer
+layout(std430, binding = 7) restrict buffer SpatialOffsetsBuffer
 {
 	uint SpatialOffsets[];
 };
-layout(std430, binding = 7) restrict buffer SortedIndicesBuffer
+layout(std430, binding = 8) restrict buffer SortedIndicesBuffer
 {
 	uint SortedIndices[];
 };
@@ -144,6 +148,23 @@ float NearDensityKernel(float dst, float Rad)
 
 	return 0;
 }
+float DensityDerivative(float dst, float Rad)
+{
+	return 0;
+}
+float NearDensityDerivative(float dst, float Rad)
+{
+	return 0;
+}
+
+// calculates density at pos given by calc_density. position is determined by thread idx
+// to calculate density efficiently, we preform a neighbor search looking for the 27 cells sorrounding our cell
+// each cell has a hash value which gives us a key to index into our spatial offsets
+// spatial offsets tells us the offset of the index of the first particle in a cell.
+// since the indices are sorted, we just increment the index to find the next particles in the given cell
+// we keep doing that until the key of the next particle no longer matches the key of this cell, which means we exited the cell
+// the density and near density accumulates across all those particles.
+// we also skip a particle if its further than the square of the smoothing kernel's radius
 vec2 calculate_density_at_pos(vec3 pos)
 {	
 
@@ -151,8 +172,6 @@ vec2 calculate_density_at_pos(vec3 pos)
 	float sqrRad = smoothingRadius * smoothingRadius;
 	float density = 0;
 	float nearDensity = 0;
-
-   
 
 
     for (int i = 0; i < 27; i++)
@@ -201,8 +220,91 @@ void check_collision()
 {
 	
 }
-void calculate_pressure()
+float PressureFromDensity(float density)
 {
+	
+}
+
+float NearPressureFromDensity(float density)
+{
+	
+}
+void calculate_pressure_force()
+{
+	uint idx = gl_GlobalInvocationID.x;
+	if (idx >= numParticles)
+		return;
+	float density = densities[idx];
+    float densityNear = nearDensities[idx];
+    float pressure = PressureFromDensity(density);
+    float nearPressure = NearPressureFromDensity(densityNear);
+    vec3 pressureForce = vec3(0,0,0);
+    vec3 velocity = velocities[idx];
+
+	vec3 pos = predictedPositions[idx];
+    ivec3 originCell = getCell3D(pos, smoothingRadius);
+    float sqrRadius = smoothingRadius * smoothingRadius;
+    int neighbourCount = 0;
+
+	// Neighbour search
+    for (int i = 0; i < 27; i++)
+    {
+        uint hash = HashCell3D(originCell + offsets3D[i]);
+        uint key = KeyFromHash(hash, numParticles);
+        uint currIndex = SpatialOffsets[key];
+
+        while (currIndex < numParticles)
+        {
+            uint neighbourIndex = currIndex;
+            currIndex++;
+
+            // Skip if looking at self
+            if (neighbourIndex == idx) continue;
+
+            uint neighbourKey = SpatialKeys[neighbourIndex];
+            // Exit if no longer looking at correct bin
+            if (neighbourKey != key) break;
+
+            vec3 neighbourPos = predictedPositions[neighbourIndex];
+            vec3 offsetToNeighbour = neighbourPos - pos;
+            float sqrDstToNeighbour = dot(offsetToNeighbour, offsetToNeighbour);
+
+            // Skip if not within radius
+            if (sqrDstToNeighbour > sqrRadius) continue;
+
+            // Calculate pressure force
+            float densityNeighbour = densities[neighbourIndex];
+            float nearDensityNeighbour = nearDensities[neighbourIndex];
+            float neighbourPressure = PressureFromDensity(densityNeighbour);
+            float neighbourPressureNear = NearPressureFromDensity(nearDensityNeighbour);
+
+            float sharedPressure = (pressure + neighbourPressure) / 2;
+            float sharedNearPressure = (nearPressure + neighbourPressureNear) / 2;
+
+            float dstToNeighbour = sqrt(sqrDstToNeighbour);
+            vec3 dirToNeighbour = dstToNeighbour > 0 ? offsetToNeighbour / dstToNeighbour : vec3(0, 1, 0);
+            neighbourCount++;
+
+            // Update pressure force
+            pressureForce += dirToNeighbour * DensityDerivative(dstToNeighbour, smoothingRadius) * sharedPressure / densityNeighbour;
+            pressureForce += dirToNeighbour * NearDensityDerivative(dstToNeighbour, smoothingRadius) * sharedNearPressure / nearDensityNeighbour;
+
+            // ---- White Particle 'Trapped Air' Calculation ----
+            vec3 relativeVelocity = velocity - velocities[neighbourIndex];
+            float relativeVelocityMagnitude = length(relativeVelocity);
+            vec3 relativeVelocityDir = relativeVelocity / max(0.000001, relativeVelocityMagnitude);
+            // 0 if moving in opposite directions; up to 2 if moving directly toward one another
+            float convergeWeight = 1 - dot(relativeVelocityDir, -dirToNeighbour);
+            // 1 when distance between particles is 0, down to 0 when distance reaches the smoothing radius
+            float influence = 1 - min(1, dstToNeighbour / smoothingRadius);
+            // Sum up weighted velocity diff between current particle and each of its surrounding neighbours
+          //  weightedVelocityDifference += relativeVelocityMagnitude * convergeWeight * influence;
+        }
+    }
+
+    vec3 acceleration = pressureForce / density;
+    vec3 velocityNew = velocity + acceleration * deltaTime;
+    velocities[idx] = velocityNew;
 
 }
 void update_positions()
