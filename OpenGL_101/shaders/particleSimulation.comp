@@ -222,13 +222,17 @@ void check_collision()
 }
 float PressureFromDensity(float density)
 {
-	
+	return 0;
 }
 
 float NearPressureFromDensity(float density)
 {
-	
+	return 0;
 }
+
+/*
+	calculates pressure force is calculated by getting the gradient of the density at the given point in the direction between the particles.
+*/
 void calculate_pressure_force()
 {
 	uint idx = gl_GlobalInvocationID.x;
@@ -289,16 +293,7 @@ void calculate_pressure_force()
             pressureForce += dirToNeighbour * DensityDerivative(dstToNeighbour, smoothingRadius) * sharedPressure / densityNeighbour;
             pressureForce += dirToNeighbour * NearDensityDerivative(dstToNeighbour, smoothingRadius) * sharedNearPressure / nearDensityNeighbour;
 
-            // ---- White Particle 'Trapped Air' Calculation ----
-            vec3 relativeVelocity = velocity - velocities[neighbourIndex];
-            float relativeVelocityMagnitude = length(relativeVelocity);
-            vec3 relativeVelocityDir = relativeVelocity / max(0.000001, relativeVelocityMagnitude);
-            // 0 if moving in opposite directions; up to 2 if moving directly toward one another
-            float convergeWeight = 1 - dot(relativeVelocityDir, -dirToNeighbour);
-            // 1 when distance between particles is 0, down to 0 when distance reaches the smoothing radius
-            float influence = 1 - min(1, dstToNeighbour / smoothingRadius);
-            // Sum up weighted velocity diff between current particle and each of its surrounding neighbours
-          //  weightedVelocityDifference += relativeVelocityMagnitude * convergeWeight * influence;
+           
         }
     }
 
