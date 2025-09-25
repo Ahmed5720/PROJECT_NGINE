@@ -1,13 +1,12 @@
 
-
-
+# PROJECT_NGINE
 ### The long term aspiration of this project is to become a small 3D engine that supports features I consider interesting Like importing models, basic mesh editing, particle simulation, Rigid body physics, rasterization and raytracing and perhaps eventually gaussian splatting. A specific aspect I intend to focus on is performing as much computation as possible on the GPU. As one might expect from the lack of structure of this project, the intention is not to produce a functionining product but purely to satisfy my curiosity. 
 
 ### For now, this project is in OpenGL/C++ and shaders are written in glsl, because those are more than enough for a basic, simple implementation of all the features I have in mind. though I realize OpenGL is getting considerably old now, and I am considering switching to a more modern vulkan/slang api's
 
 
 
-
+## Smoothed particle hydrodynamics fluid simulation
 ![Alt text](media/psimsnap.png "simulation")
 In this project we created a fluid simulation using smoothed particle hydrodynamics. 
 based on this paper:
