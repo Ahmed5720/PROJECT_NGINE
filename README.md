@@ -19,7 +19,8 @@ Therefore, we implement a spatial hashgrid to optimize neighbor search. The goal
 
 particle Buffer: [0,1,3,4,5,6,7,8,9,10,11]
 
-spatialKeys Buffer: [0,0,0,1,1,2,2,2,2,3,3]
+spatialKeys Buffer: [0,0,0,1,1,2,2,2,2,3,3]  
+
                     ^      ^   ^       ^  
                     cell 0 Cell 1      Cell 3
 
@@ -29,4 +30,4 @@ spatialOffsets Buffer: [0,3,5,9]
 
 This structures allows us to efficiently index into any particle in almost O(1) time (we still need to iterate over the 3*3 grid sorrounding the particle but that's a significant reduction over looping through all particles. Intuitively this implementation lends itself to a highly parallilized GPU implementation.
 
-![Alt text](media/spatialgrid.png "spatial grid")
+![Alt text](media/spatialgrid.png "spatial grid" with a hashgrid, we only search 3*3 grid sorrounding a particle)
