@@ -1,0 +1,70 @@
+#version 430 core
+layout(local_size_x = 64) in;
+
+struct Particle { vec4 posLife; vec4 color; vec4 velPad; };
+struct SPHData  { vec4 densPres; vec4 forcePad; };
+
+layout(std430, binding = 1) buffer Particles { Particle particles[]; };
+layout(std430, binding = 2) buffer SphData   { SPHData  sph[]; };
+
+layout(std140, binding = 0) uniform SimulationParams {
+    vec4 p0; vec4 p1; vec4 p2; vec4 boxMin; vec4 boxMax; vec4 kernel;
+};
+
+vec3 spiky_grad(float r, vec3 r_norm) {
+    float h = p1.x;
+    if (r >= h || r <= 0.0) return vec3(0.0);
+    float x = (h - r);
+    return kernel.y * (x * x) * r_norm; // spiky_const * (h-r)^2 * r_norm
+}
+
+float viscosity_kernel(float r) {
+    float h  = p1.x;
+    float h2 = p1.y;
+    float h3 = h2 * h;
+    if (r >= h || r <= 0.0) return 0.0;
+    return -(r*r*r)/(2.0*h3) + (r*r)/h2 + h/(2.0*r) - 1.0;
+}
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint count = uint(p0.z);
+    if (i >= count) return;
+
+    vec3 pi = particles[i].posLife.xyz;
+    vec3 vi = particles[i].velPad.xyz;
+
+    float di = sph[i].densPres.x;
+    float pi_pressure = sph[i].densPres.y;
+
+    vec3 force = vec3(0.0);
+
+    for (uint j = 0u; j < count; ++j) {
+        if (j == i) continue;
+
+        vec3 pj = particles[j].posLife.xyz;
+        vec3 vj = particles[j].velPad.xyz;
+
+        float dj = sph[j].densPres.x;
+        float pj_pressure = sph[j].densPres.y;
+
+        vec3 d = pi - pj;
+        float r2 = dot(d, d);
+        float r  = sqrt(r2);
+
+        if (r > 0.0 && r < p1.x) {
+            vec3 r_norm = d / r;
+
+            // pressure force
+            vec3 pressure_force =
+                -p1.z * ( (pi_pressure/(di*di)) + (pj_pressure/(dj*dj)) ) * spiky_grad(r, r_norm);
+
+            // viscosity
+            vec3 viscosity_force = (1.0 / dj) * (vj - vi) * viscosity_kernel(r);
+
+            force += pressure_force + (p2.y * viscosity_force);
+        }
+    }
+
+    sph[i].forcePad = vec4(force, 0.0);
+}
