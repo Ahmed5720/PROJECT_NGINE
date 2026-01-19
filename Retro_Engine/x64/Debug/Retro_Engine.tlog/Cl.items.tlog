@@ -1,8 +1,0 @@
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui.obj
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui_draw.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui_draw.obj
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui_impl_glfw.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui_impl_glfw.obj
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui_impl_opengl3.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui_impl_opengl3.obj
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui_tables.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui_tables.obj
-C:\Dev\Retro_Engine\Dependencies\include\imgui\imgui_widgets.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\imgui_widgets.obj
-C:\Dev\Retro_Engine\Retro_Engine\glad.c;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\glad.obj
-C:\Dev\Retro_Engine\Retro_Engine\src\main.cpp;C:\Dev\Retro_Engine\Retro_Engine\x64\Debug\main.obj
