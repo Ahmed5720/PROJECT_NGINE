@@ -1,15 +1,35 @@
 #include <vector>
 #include <cmath>
+
 // mini vector / matrix library
+struct vec2f
+{
+    float x,y;
+    vec2f()
+    {
+        x = 0;
+        y = 0;
+    }
+};
+struct vec3i
+{
+    int x,y,z;
+    vec3i(int _x, int _y, int _z)
+    {
+        x = _x;
+        y = _y;
+        z = _z;
+    }
+};
 struct vec3f
 {
-    float x,y,z,w = 1;
+    float x,y,z,w = 1.0f;
     vec3f()
     {
         x = 0;
         y = 0;
         z = 0;
-        w = 1;
+        w = 1.0f;
     }
     vec3f(float _x, float _y, float _z)
     {
@@ -23,6 +43,13 @@ struct vec3f
         y = _y;
         z = _z;
         w = _w; 
+    }
+    vec3f(vec3i vi)
+    {
+        x = float(vi.x);
+        y = float(vi.y);
+        z = float(vi.z);
+        w = 1.0f;
     }
 };
 vec3f& operator+=(vec3f& v1, const vec3f& v2)
@@ -145,27 +172,28 @@ mat4x4 matrix_makeRotationZ(float angleRad)
     return mat;
 }
 
-mat4x4 matrix_makeProjection(float fovDegrees, float aspectRatio, float Znear, float Zfar)
+mat4x4 matrix_makeProjection(float fovDeg, float aspect, float zNear, float zFar)
 {
-    mat4x4 projMat;
-   
-    const float Zq = Zfar / (Zfar-Znear);
-    const float Znq = Zfar * Znear / (Zfar - Znear); 
+    float f = 1.0f / tanf(fovDeg * 0.5f * 3.1415 / 180.0f);
 
-
-    projMat.m[0][0] = aspectRatio * fovDegrees;
-    projMat.m[1][1] = fovDegrees;
-    projMat.m[2][2] = Zq;
-    projMat.m[2][3] = 1;
-    projMat.m[3][2] = -Znq;
-    return projMat;
+    mat4x4 m;
+    m.m[0][0] = f / aspect;
+    m.m[1][1] = f;
+    m.m[2][2] = (zFar + zNear) / (zNear - zFar);
+    m.m[2][3] = (2 * zFar * zNear) / (zNear - zFar);
+    m.m[3][2] = -1.0f;
+    return m;
 }
 
 mat4x4 matrix_matmul(mat4x4 &m1, mat4x4& m2)
 {   
     mat4x4 res;
-    for (int c = 0; c < 4; c++)
-        for (int r = 0; r < 4; r++)
-            res.m[r][c] = m1.m[0][0] * m2.m[0][0] + m1.m[r][1] * m2.m[1][c] + m1.m[r][2] * m2.m[2][c] + m1.m[r][3] * m2.m[3][c];   
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            res.m[r][c] =
+                m1.m[r][0] * m2.m[0][c] +
+                m1.m[r][1] * m2.m[1][c] +
+                m1.m[r][2] * m2.m[2][c] +
+                m1.m[r][3] * m2.m[3][c];
     return res;
 }

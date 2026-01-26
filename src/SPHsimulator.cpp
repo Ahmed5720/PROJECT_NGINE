@@ -21,7 +21,7 @@ const float VISCOSITY_CONSTANT = 0.01f;
 const float GRAVITY = -9.8f;
 const float BOUNCE_DAMPING = 0.5f;
 const float TIME_STEP = 0.001f;
-
+const float M_PI = 3.14;
 const vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
 const vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
 
@@ -43,7 +43,7 @@ struct Particle {
 struct SPHData {
     float density;
     float pressure;
-    glm::vec2 _pad0;
+    vec2f _pad0;
     vec3f force;
     float _pad1;
 };
@@ -61,7 +61,7 @@ struct SimParams {
     
     float pressureConstant;
     float viscosityConstant;
-    glm::vec2 _pad0;
+    vec2f _pad0;
     
     vec3f boxMin;
     float poly6Constant;
@@ -73,7 +73,7 @@ struct SimParams {
     float cellSize;
     
     uint32_t tableSize;
-    glm::uvec3 _pad1;
+    vec3f _pad1;
 };
 
 // ============================================================================
@@ -89,7 +89,6 @@ std::string loadShaderSource(const std::string& filepath) {
 
 GLuint compileComputeShader(const std::string& source, const std::string& define) {
     GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
-    
     std::string fullSource = "#version 430 core\n#define " + define + "\n" + source;
     const char* src = fullSource.c_str();
     
@@ -120,9 +119,9 @@ float spikyConstant(float h) {
     return -45.0f / (M_PI * std::pow(h, 6));
 }
 
-glm::ivec3 calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
-    vec3f extent = boxMax - boxMin;
-    return glm::ivec3(
+vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
+    vec3f extent = vector_sub(boxMax, boxMin);
+    return vec3i(
         std::ceil(extent.x / cellSize),
         std::ceil(extent.y / cellSize),
         std::ceil(extent.z / cellSize)
@@ -333,7 +332,7 @@ private:
                         BOX_MIN.y + 0.1f + y * spacing,
                         BOX_MIN.z + 0.1f + z * spacing
                     );
-                    particles[idx].velocity = vec3f(0.0f);
+                    particles[idx].velocity = vec3f(0.0f,0.0f,0.0f);
                     particles[idx].color = vec3f(0.3f, 0.5f, 1.0f, 1.0f);
                     particles[idx].life = 1.0f;
                     idx++;

@@ -9,11 +9,11 @@
 using namespace std; 
 
 
-const int Height = 800;
-const int Width = 600;
-const float FOV = 90;
-const float PI = 3.14;
-const float Zfar = 1000;
+const int Height = 600;
+const int Width = 800;
+const float FOV = 90.0f;
+const float PI = 3.1415;
+const float Zfar = 1000.0f;
 const float Znear = 0.1;
 
 // Vertex shader source code
@@ -27,7 +27,7 @@ const char* vertexShaderSource = R"(
     
     void main()
     {
-        gl_Position = projection * vec4(aPos, 1.0);
+        gl_Position =  vec4(aPos, 1.0);
         vLightIntensity = aLightIntensity;
     }
 )";
@@ -39,7 +39,7 @@ const char* fragmentShaderSource = R"(
     
     void main()
     {
-        vec3 baseColor = vec3(1.0, 0.5, 0.2);
+        vec3 baseColor = vec3(1.0, 1.0, 1.0);
         
         vec3 finalColor = baseColor * max(vLightIntensity, 0.1);
         
@@ -193,23 +193,22 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     glViewport(0, 0, width, height);
 }
 
+
 void initialize(mesh& mesh, mat4x4& projMat)
 {
     
-    
-
     mesh.LoadFromObjectFile("model.obj");
 
-    const float aspect = Height/Width;
+    const float aspect = (float)Height/(float)Width;
     const float f = 1 / (tanf(FOV * PI / 360.0)); // fov / 2 (to radians)
-    projMat = matrix_makeProjection(f, aspect, Zfar, Znear);
+    projMat = matrix_makeProjection(FOV, aspect, Znear, Zfar);
 
 }
 float fTheta = 0.0f;
 vec3f vCamera;
 void renderloop(mesh& mesh, mat4x4& projMat)
 {
-    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClearColor(0.1f, 0.1f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
 
@@ -233,7 +232,8 @@ void renderloop(mesh& mesh, mat4x4& projMat)
     transMat = matrix_makeTranslation(0, 0, 3.0f); 
 
     modelMat = matrix_makeIdentity();
-    modelMat = matrix_matmul(rotXMat, transMat);
+    //modelMat = matrix_matmul(rotXMat, transMat);
+    modelMat = matrix_matmul(transMat, rotXMat);
 
         // Illumination
     vec3f light_direction = { 0.0f, 0.0f, -1.0f };
@@ -301,7 +301,7 @@ void renderloop(mesh& mesh, mat4x4& projMat)
             glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
             
             // Draw the triangle with fill mode (not wireframe)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
         }
@@ -321,7 +321,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "ZMMR", NULL, NULL);
+    window = glfwCreateWindow(Width, Height, "Renderer", NULL, NULL);
     if (window == NULL)
     {
         cout << "Failed to open GLFW window" << endl;
@@ -342,7 +342,7 @@ int main()
     mesh mesh;
     mat4x4 projMat;
     initialize(mesh, projMat);
-    glEnable(GL_DEPTH);
+    glEnable(GL_DEPTH_TEST);
 
     while(!glfwWindowShouldClose(window))
     {
