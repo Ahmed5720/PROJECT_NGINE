@@ -9,8 +9,8 @@
 using namespace std; 
 
 
-const int Height = 600;
-const int Width = 800;
+const int Height = 1200;
+const int Width = 1200;
 const float FOV = 90.0f;
 const float PI = 3.1415;
 const float Zfar = 1000.0f;
@@ -184,6 +184,38 @@ struct mesh
 		return true;
 	}
 
+    void recenterMesh(mesh& m)
+    {
+        if (m.tris.empty()) return;
+
+        vec3f minv( 1e9f,  1e9f,  1e9f);
+        vec3f maxv(-1e9f, -1e9f, -1e9f);
+
+        for (const auto& t : m.tris)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                const vec3f& v = t.p[i];
+                minv.x = std::min(minv.x, v.x);
+                minv.y = std::min(minv.y, v.y);
+                minv.z = std::min(minv.z, v.z);
+                maxv.x = std::max(maxv.x, v.x);
+                maxv.y = std::max(maxv.y, v.y);
+                maxv.z = std::max(maxv.z, v.z);
+            }
+        }
+
+        vec3f center(
+            (minv.x + maxv.x) * 0.5f,
+            (minv.y + maxv.y) * 0.5f,
+            (minv.z + maxv.z) * 0.5f
+        );
+
+        for (auto& t : m.tris)
+            for (int i = 0; i < 3; i++)
+                t.p[i] = vector_sub(t.p[i], center);
+    }
+
 };
 
 
@@ -197,10 +229,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 void initialize(mesh& mesh, mat4x4& projMat)
 {
     
-    mesh.LoadFromObjectFile("model.obj");
-
-    const float aspect = (float)Height/(float)Width;
-    const float f = 1 / (tanf(FOV * PI / 360.0)); // fov / 2 (to radians)
+    bool loaded = mesh.LoadFromObjectFile("model.obj");
+    cout << "OBJ load: " << loaded << " tris=" << mesh.tris.size() << "\n";
+    mesh.recenterMesh(mesh);
+    const float aspect = (float)Width/(float)Height;
     projMat = matrix_makeProjection(FOV, aspect, Znear, Zfar);
 
 }
@@ -222,33 +254,29 @@ void renderloop(mesh& mesh, mat4x4& projMat)
 
     int projLoc = glGetUniformLocation(shaderProgram, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glMat);
-    fTheta += 0.001; 
+    fTheta += 0.1; 
     mat4x4 modelMat, rotXMat, transMat;
 
-    // Rotation X
 
-    // order is Scale -> Rot -> Trans (SRT)
-    rotXMat = matrix_makeRotationX(fTheta * 0.5f);
-    transMat = matrix_makeTranslation(0, 0, 3.0f); 
-
+    rotXMat = matrix_makeRotationY(fTheta * 0.5f);
+    transMat = matrix_makeTranslation(0.0, 0, -1.0f); 
+    
     modelMat = matrix_makeIdentity();
-    //modelMat = matrix_matmul(rotXMat, transMat);
-    modelMat = matrix_matmul(transMat, rotXMat);
+    // order is Scale -> Rot -> Trans (SRT)
+    modelMat = matrix_matmul(rotXMat, transMat);
 
         // Illumination
-    vec3f light_direction = { 0.0f, 0.0f, -1.0f };
+    vec3f light_direction = { 0.0f, 0.0f, 1.0f };
     light_direction = vector_normalize(light_direction);
+
+
     for (triangle tri : mesh.tris)
     {
-        triangle projectedTri, rotatedTri;
-        // rotate
-        // vectorMatMul(tri.p[0], rotatedTri.p[0], rotMat); 
-        // vectorMatMul(tri.p[1], rotatedTri.p[1], rotMat); 
-        // vectorMatMul(tri.p[2], rotatedTri.p[2], rotMat);
-        rotatedTri.p[0] = vectorMatMul(tri.p[0], modelMat); 
-        rotatedTri.p[1] = vectorMatMul(tri.p[1], modelMat); 
-        rotatedTri.p[2] = vectorMatMul(tri.p[2], modelMat); 
-   
+        triangle projectedTri, transformedTri;
+        transformedTri.p[0] = vectorMatMul(tri.p[0], modelMat); 
+        transformedTri.p[1] = vectorMatMul(tri.p[1], modelMat); 
+        transformedTri.p[2] = vectorMatMul(tri.p[2], modelMat); 
+
 
         // Then project
 
@@ -256,16 +284,16 @@ void renderloop(mesh& mesh, mat4x4& projMat)
         // Use Cross-Product to get surface normal
         vec3f normal, line1, line2;
 
-        line1 = vector_sub(rotatedTri.p[1], rotatedTri.p[0]);
-        line2 = vector_sub(rotatedTri.p[2], rotatedTri.p[0]);
+        line1 = vector_sub(transformedTri.p[1], transformedTri.p[0]);
+        line2 = vector_sub(transformedTri.p[2], transformedTri.p[0]);
         normal = vector_cross(line1, line2);
 
         // It's normally normal to normalise the normal
         normal = vector_normalize(normal);
         //if (normal.z < 0)
-        if(normal.x * (rotatedTri.p[0].x - vCamera.x) + 
-            normal.y * (rotatedTri.p[0].y - vCamera.y) +
-            normal.z * (rotatedTri.p[0].z - vCamera.z) < 0.0f)
+        //float normal_ddp = vector_dot(normal, d);
+        vec3f camRay = vector_sub(transformedTri.p[0], vCamera);
+        if(vector_dot(normal, camRay) < 0.0f)
         {
 
             // How similar is normal to light direction
@@ -276,13 +304,13 @@ void renderloop(mesh& mesh, mat4x4& projMat)
             // to do this we need to get the surface normals of each tri
             // normal can be computed as the cross product of two line segments in a tri
             // then we project only if normal dot view_dir > 0
-            projectedTri.p[0] = vectorMatMul(rotatedTri.p[0], projMat); 
-            projectedTri.p[1] = vectorMatMul(rotatedTri.p[1], projMat); 
-            projectedTri.p[2] = vectorMatMul(rotatedTri.p[2], projMat); 
+            projectedTri.p[0] = vectorMatMul(transformedTri.p[0], projMat); 
+            projectedTri.p[1] = vectorMatMul(transformedTri.p[1], projMat); 
+            projectedTri.p[2] = vectorMatMul(transformedTri.p[2], projMat); 
 
             projectedTri.p[0] = vector_div(projectedTri.p[0], projectedTri.p[0].w);
-            projectedTri.p[1] = vector_div(projectedTri.p[1], projectedTri.p[0].w);
-            projectedTri.p[2] = vector_div(projectedTri.p[2], projectedTri.p[0].w);
+            projectedTri.p[1] = vector_div(projectedTri.p[1], projectedTri.p[1].w);
+            projectedTri.p[2] = vector_div(projectedTri.p[2], projectedTri.p[2].w);
             // draw
             float vertices[] = {
                 projectedTri.p[0].x, projectedTri.p[0].y, projectedTri.p[0].z, dp,
@@ -301,7 +329,7 @@ void renderloop(mesh& mesh, mat4x4& projMat)
             glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
             
             // Draw the triangle with fill mode (not wireframe)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
         }
@@ -335,7 +363,7 @@ int main()
         return -1;
     }
 
-    glViewport(0, 0, Height, Width);
+    glViewport(0, 0, Width, Height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
     setupOpenGL();

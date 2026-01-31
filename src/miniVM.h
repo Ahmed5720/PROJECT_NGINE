@@ -96,7 +96,7 @@ vec3f vector_cross(vec3f vec1, vec3f vec2)
         , vec1.z * vec2.x - vec1.x * vec2.z
         , vec1.x * vec2.y - vec1.y * vec2.x};
 }
-float vector_dot(vec3f &vec1, vec3f &vec2)
+float vector_dot(const vec3f &vec1, const vec3f &vec2)
 {
     return vec1.x * vec2.x +  vec1.y * vec2.y + vec1.z * vec2.z;
 }
@@ -180,8 +180,9 @@ mat4x4 matrix_makeProjection(float fovDeg, float aspect, float zNear, float zFar
     m.m[0][0] = f / aspect;
     m.m[1][1] = f;
     m.m[2][2] = (zFar + zNear) / (zNear - zFar);
-    m.m[2][3] = (2 * zFar * zNear) / (zNear - zFar);
-    m.m[3][2] = -1.0f;
+    m.m[2][3] = -1.0f;
+    m.m[3][2] = (2 * zFar * zNear) / (zNear - zFar);
+    m.m[3][3] = 0.0f;
     return m;
 }
 
