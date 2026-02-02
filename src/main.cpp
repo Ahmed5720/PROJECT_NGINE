@@ -237,10 +237,39 @@ void initialize(mesh& mesh, mat4x4& projMat)
 
 }
 float fTheta = 0.0f;
-vec3f vCamera;
-void renderloop(mesh& mesh, mat4x4& projMat)
-{
-    glClearColor(0.1f, 0.1f, 0.0f, 1.0f);
+vec3f vCamera = {0,0,0};
+float fYaw = 0;
+vec3f up = {0,1,0};
+vec3f lookDir = {0,0,1};
+vec3f LookatTarget = {0,0,1};
+mat4x4 CameraMatrix;
+mat4x4 ViewMatrix;
+    // Illumination
+vec3f light_direction = { 0.0f, 0.0f, 1.0f };
+void renderloop(GLFWwindow* window, mesh& mesh, mat4x4& projMat)
+{   
+    //player input
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        vCamera.y += 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        vCamera.y -= 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        vCamera.x += 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        vCamera.x -= 0.1f;
+
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+        fYaw -= 2.0f * (PI / 180.0f);
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+        fYaw += 2.0f * (PI / 180.0f);
+    vec3f camForwardV = vector_mul(lookDir, 0.01f);
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+        vCamera = vector_add(vCamera, camForwardV);
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+        vCamera = vector_sub(vCamera, camForwardV);
+    
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
 
@@ -265,27 +294,35 @@ void renderloop(mesh& mesh, mat4x4& projMat)
     // order is Scale -> Rot -> Trans (SRT)
     modelMat = matrix_matmul(rotXMat, transMat);
 
-        // Illumination
-    vec3f light_direction = { 0.0f, 0.0f, 1.0f };
     light_direction = vector_normalize(light_direction);
+    mat4x4 matCamRot = matrix_makeRotationY(fYaw);
+    vec3f LookatTarget = {0,0,1};
+    lookDir = vectorMatMul(LookatTarget, matCamRot);
+    lookDir = vector_normalize(lookDir);
+    LookatTarget = vector_add(vCamera, lookDir);
 
-
+    CameraMatrix = matrix_pointAt(vCamera, LookatTarget, up);
+    ViewMatrix = matrix_quickInvert(CameraMatrix);
     for (triangle tri : mesh.tris)
     {
-        triangle projectedTri, transformedTri;
+        triangle projectedTri, transformedTri, viewedTri;
+        //transform
         transformedTri.p[0] = vectorMatMul(tri.p[0], modelMat); 
         transformedTri.p[1] = vectorMatMul(tri.p[1], modelMat); 
         transformedTri.p[2] = vectorMatMul(tri.p[2], modelMat); 
 
+        //then apply view transformation
+        viewedTri.p[0] = vectorMatMul(transformedTri.p[0], ViewMatrix);
+        viewedTri.p[1] = vectorMatMul(transformedTri.p[1], ViewMatrix);
+        viewedTri.p[2] = vectorMatMul(transformedTri.p[2], ViewMatrix);
 
         // Then project
-
 
         // Use Cross-Product to get surface normal
         vec3f normal, line1, line2;
 
-        line1 = vector_sub(transformedTri.p[1], transformedTri.p[0]);
-        line2 = vector_sub(transformedTri.p[2], transformedTri.p[0]);
+        line1 = vector_sub(viewedTri.p[1], viewedTri.p[0]);
+        line2 = vector_sub(viewedTri.p[2], viewedTri.p[0]);
         normal = vector_cross(line1, line2);
 
         // It's normally normal to normalise the normal
@@ -304,9 +341,9 @@ void renderloop(mesh& mesh, mat4x4& projMat)
             // to do this we need to get the surface normals of each tri
             // normal can be computed as the cross product of two line segments in a tri
             // then we project only if normal dot view_dir > 0
-            projectedTri.p[0] = vectorMatMul(transformedTri.p[0], projMat); 
-            projectedTri.p[1] = vectorMatMul(transformedTri.p[1], projMat); 
-            projectedTri.p[2] = vectorMatMul(transformedTri.p[2], projMat); 
+            projectedTri.p[0] = vectorMatMul(viewedTri.p[0], projMat); 
+            projectedTri.p[1] = vectorMatMul(viewedTri.p[1], projMat); 
+            projectedTri.p[2] = vectorMatMul(viewedTri.p[2], projMat); 
 
             projectedTri.p[0] = vector_div(projectedTri.p[0], projectedTri.p[0].w);
             projectedTri.p[1] = vector_div(projectedTri.p[1], projectedTri.p[1].w);
@@ -320,8 +357,6 @@ void renderloop(mesh& mesh, mat4x4& projMat)
             
             
             
-            // Draw the triangle
-            //glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
             // Bind VAO and update vertex data
             glBindVertexArray(VAO);
@@ -375,7 +410,7 @@ int main()
     while(!glfwWindowShouldClose(window))
     {
         
-        renderloop(mesh, projMat);
+        renderloop(window, mesh, projMat);
         glfwSwapBuffers(window);
 
         glfwPollEvents();    

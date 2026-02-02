@@ -186,6 +186,57 @@ mat4x4 matrix_makeProjection(float fovDeg, float aspect, float zNear, float zFar
     return m;
 }
 
+mat4x4 matrix_pointAt(vec3f &pos, vec3f &target, vec3f &up)
+{      
+    // Calculate new forward direction
+    vec3f forward = vector_sub(target, pos);
+    forward = vector_normalize(forward);
+
+    // Calculate new Up direction
+    vec3f a = vector_mul(forward, vector_dot(up, forward));
+    vec3f newUp = vector_sub(up, a);
+    newUp = vector_normalize(newUp);
+
+    // New Right direction is easy, its just cross product
+    vec3f right = vector_cross(newUp, forward);
+    mat4x4 matrix;
+    matrix.m[0][0] = right.x;
+    matrix.m[1][0] = up.x;
+    matrix.m[2][0] = forward.x;
+    matrix.m[3][0] = pos.x;
+
+    matrix.m[0][1] = right.y;
+    matrix.m[1][1] = up.y;
+    matrix.m[2][1] = forward.y;
+    matrix.m[3][1] = pos.y;
+
+    matrix.m[0][2] = right.z;
+    matrix.m[1][2] = up.z;
+    matrix.m[2][2] = forward.z;
+    matrix.m[3][2] = pos.z;
+
+    matrix.m[0][3] = 0.0f;
+    matrix.m[1][3] = 0.0f;
+    matrix.m[2][3] = 0.0f;
+    matrix.m[3][3] = 1.0f;
+
+
+    return matrix;
+}
+
+mat4x4 matrix_quickInvert(mat4x4 &m)
+{
+    mat4x4 matrix;
+    matrix.m[0][0] = m.m[0][0]; matrix.m[0][1] = m.m[1][0]; matrix.m[0][2] = m.m[2][0]; matrix.m[0][3] = 0.0f;
+    matrix.m[1][0] = m.m[0][1]; matrix.m[1][1] = m.m[1][1]; matrix.m[1][2] = m.m[2][1]; matrix.m[1][3] = 0.0f;
+    matrix.m[2][0] = m.m[0][2]; matrix.m[2][1] = m.m[1][2]; matrix.m[2][2] = m.m[2][2]; matrix.m[2][3] = 0.0f;
+    matrix.m[3][0] = -(m.m[3][0] * matrix.m[0][0] + m.m[3][1] * matrix.m[1][0] + m.m[3][2] * matrix.m[2][0]);
+    matrix.m[3][1] = -(m.m[3][0] * matrix.m[0][1] + m.m[3][1] * matrix.m[1][1] + m.m[3][2] * matrix.m[2][1]);
+    matrix.m[3][2] = -(m.m[3][0] * matrix.m[0][2] + m.m[3][1] * matrix.m[1][2] + m.m[3][2] * matrix.m[2][2]);
+    matrix.m[3][3] = 1.0f;
+    return matrix;
+}
+
 mat4x4 matrix_matmul(mat4x4 &m1, mat4x4& m2)
 {   
     mat4x4 res;
