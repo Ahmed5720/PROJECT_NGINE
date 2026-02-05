@@ -1,3 +1,4 @@
+#define STB_IMAGE_IMPLEMENTATION
 #include <iostream>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -6,8 +7,16 @@
 #include <fstream>
 #include <strstream>
 #include "miniVM.h"
+#include "OBJLoader.h"
+#include "stb_image.h"
+#include "geometry.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
+#include "particleSimulation.h"
+#include "shader.h"
+#include "ParticleRenderer.h"
 using namespace std; 
-
 
 const int Height = 1200;
 const int Width = 1200;
@@ -16,41 +25,68 @@ const float PI = 3.1415;
 const float Zfar = 1000.0f;
 const float Znear = 0.1;
 
-// Vertex shader source code
-const char* vertexShaderSource = R"(
-    #version 330 core
-    layout (location = 0) in vec3 aPos;
-    layout (location = 1) in float aLightIntensity;
-    uniform mat4 projection;
-    
-    out float vLightIntensity;
-    
-    void main()
-    {
-        gl_Position =  vec4(aPos, 1.0);
-        vLightIntensity = aLightIntensity;
+
+float fTheta = 0.0f;
+float fYaw = 0;
+vec3f vCamera = {0,0,0};
+vec3f up = {0,1,0};
+vec3f lookDir = {0,0,1};
+vec3f LookatTarget = {0,0,1};
+mat4x4 CameraMatrix;
+mat4x4 view;
+mat4x4 model;
+mat4x4 rotXMat;
+mat4x4 transMat;
+mat4x4 projection;
+MeshGPU gMesh;
+GLuint gTex0 = 0;
+
+ParticleRenderer particleRenderer;
+
+
+bool showDemoWindow = false;
+bool showControlWindow = true;
+float lightDirection[3] = {0.0f, 0.0f, 1.0f};
+float modelPosition[3] = {0.0f, 0.0f, 1.0f};
+float modelRotation[3] = {0.0f, 0.0f, 0.0f};
+float backgroundColor[3] = {0.2f, 0.5f, 0.5f};
+float cameraPosition[3] = {0.0f, 0.0f, 0.0f};
+float lightColor[3] = {1.0f , 1.0f, 1.0f};
+float specularStrength = 0.8f;
+float ambientStrength = 0.2f;
+float cameraYaw = 0.0f;
+GLuint LoadTexture2D(const std::string& path)
+{
+    int width, height, channels;
+    //stbi_set_flip_vertically_on_load(true); 
+    unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
+    if (!data) {
+        std::cerr << "STB failed to load: " << path << " - Error: " << stbi_failure_reason() << "\n";
+        return 0;
     }
-)";
-
-const char* fragmentShaderSource = R"(
-    #version 330 core
-    in float vLightIntensity;
-    out vec4 FragColor;
     
-    void main()
-    {
-        vec3 baseColor = vec3(1.0, 1.0, 1.0);
-        
-        vec3 finalColor = baseColor * max(vLightIntensity, 0.1);
-        
-        FragColor = vec4(finalColor, 1.0);
+    GLenum format;
+    if (channels == 1)
+        format = GL_RED;
+    else if (channels == 3)
+        format = GL_RGB;
+    else if (channels == 4)
+        format = GL_RGBA;
+    else {
+        stbi_image_free(data);
+        return 0;
     }
-)";
-
-
-unsigned int shaderProgram;
-unsigned int VAO, VBO;
-
+    
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    
+    stbi_image_free(data);
+    return tex;
+}
 unsigned int compileShader(GLenum type, const char* source)
 {
     unsigned int shader = glCreateShader(type);
@@ -69,232 +105,308 @@ unsigned int compileShader(GLenum type, const char* source)
     }
     return shader;
 }
-
-// Function to set up shaders and buffers
-void setupOpenGL()
+shader setupOpenGL()
 {
-    // Compile shaders
-    unsigned int vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
-    unsigned int fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
     
-    // Create shader program
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
+    shader graphicsShader("C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\shader.vs", "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\shader.fs");
     
-    // Check for linking errors
-    int success;
-    char infoLog[512];
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success)
-    {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << endl;
-    }
-    
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-    
-    // Generate and bind VAO and VBO
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    
-    // We'll use separate buffers for position and lighting intensity
-    // For now, just configure the VAO for interleaved attributes
-    
-    // Configure vertex attributes
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    
-    // Configure lighting intensity attribute (stride is 4 floats: 3 for position, 1 for intensity)
-    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
+    return graphicsShader;
 }
-
-struct triangle
-{   
-    vec3f p[3]; 
-    triangle()
-    {
-        p[0];
-        p[1];
-        p[2];
-    }
-    triangle(vec3f a, vec3f b, vec3f c)
-    {
-        p[0] = a;
-        p[1] = b;
-        p[2] = c;
-    }
-    triangle(float x1, float y1, float z1,
-             float x2, float y2, float z2,
-             float x3, float y3, float z3)
-    {
-        p[0] = vec3f(x1,y1,z1);
-        p[1] = vec3f(x2,y2,z2);
-        p[2] = vec3f(x3,y3,z3);
-    }
-};
-
-struct mesh
-{
-	vector<triangle> tris;
-
-	bool LoadFromObjectFile(string sFilename)
-	{
-		ifstream f(sFilename);
-		if (!f.is_open())
-			return false;
-
-		// Local cache of verts
-		vector<vec3f> verts;
-
-		while (!f.eof())
-		{
-			char line[128];
-			f.getline(line, 128);
-
-			strstream s;
-			s << line;
-
-			char junk;
-
-			if (line[0] == 'v')
-			{
-				vec3f v;
-				s >> junk >> v.x >> v.y >> v.z;
-				verts.push_back(v);
-			}
-
-			if (line[0] == 'f')
-			{
-				int f[3];
-				s >> junk >> f[0] >> f[1] >> f[2];
-				tris.push_back({ verts[f[0] - 1], verts[f[1] - 1], verts[f[2] - 1] });
-			}
-		}
-
-		return true;
-	}
-
-    void recenterMesh(mesh& m)
-    {
-        if (m.tris.empty()) return;
-
-        vec3f minv( 1e9f,  1e9f,  1e9f);
-        vec3f maxv(-1e9f, -1e9f, -1e9f);
-
-        for (const auto& t : m.tris)
-        {
-            for (int i = 0; i < 3; i++)
-            {
-                const vec3f& v = t.p[i];
-                minv.x = std::min(minv.x, v.x);
-                minv.y = std::min(minv.y, v.y);
-                minv.z = std::min(minv.z, v.z);
-                maxv.x = std::max(maxv.x, v.x);
-                maxv.y = std::max(maxv.y, v.y);
-                maxv.z = std::max(maxv.z, v.z);
-            }
-        }
-
-        vec3f center(
-            (minv.x + maxv.x) * 0.5f,
-            (minv.y + maxv.y) * 0.5f,
-            (minv.z + maxv.z) * 0.5f
-        );
-
-        for (auto& t : m.tris)
-            for (int i = 0; i < 3; i++)
-                t.p[i] = vector_sub(t.p[i], center);
-    }
-
-};
-
-
-
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
-
-
-void initialize(mesh& mesh, mat4x4& projMat)
+void initialize()
 {
     
-    bool loaded = mesh.LoadFromObjectFile("model.obj");
-    cout << "OBJ load: " << loaded << " tris=" << mesh.tris.size() << "\n";
-    mesh.recenterMesh(mesh);
+    std::vector<Vertex> verts; 
+    std::vector<uint32_t> indices;
+    bool ok = LoadOBJ_Indexed("C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\POT.obj", verts, indices);
+    std::cout << "OBJ ok=" << ok
+          << " verts=" << verts.size()
+          << " indices=" << indices.size()
+          << "\n";
     const float aspect = (float)Width/(float)Height;
-    projMat = matrix_makeProjection(FOV, aspect, Znear, Zfar);
+    projection = matrix_makeProjection(FOV, aspect, Znear, Zfar);
 
+    gMesh.upload(verts, indices);
+    gTex0 = LoadTexture2D("C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\diffuse.png");
+    if(!gTex0)
+    {
+        cout << "failed to load texture\n";
+        exit(1);
+    }
+    
 }
-float fTheta = 0.0f;
-vec3f vCamera = {0,0,0};
-float fYaw = 0;
-vec3f up = {0,1,0};
-vec3f lookDir = {0,0,1};
-vec3f LookatTarget = {0,0,1};
-mat4x4 CameraMatrix;
-mat4x4 ViewMatrix;
-    // Illumination
-vec3f light_direction = { 0.0f, 0.0f, 1.0f };
-void renderloop(GLFWwindow* window, mesh& mesh, mat4x4& projMat)
+void setupImGui(GLFWwindow* window)
+{
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+    
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 430");
+}
+void renderImGui()
+{
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    // Update UI variables from game state
+    cameraPosition[0] = vCamera.x;
+    cameraPosition[1] = vCamera.y;
+    cameraPosition[2] = vCamera.z;
+    cameraYaw = fYaw;
+
+    // 2. Show control window
+    if (showControlWindow)
+    {
+        ImGui::Begin("Controls", &showControlWindow);
+        
+        // Simulation Controls - NEW SECTION
+        if (ImGui::CollapsingHeader("SPH Simulation Parameters"))
+        {
+            // Static parameters
+            ImGui::Text("Simulation Settings");
+            ImGui::Separator();
+            
+            ImGui::Text("Particle Count: %d", PARTICLE_COUNT);
+            ImGui::Text("Box Min: (%.2f, %.2f, %.2f)", 
+                       BOX_MIN.x, BOX_MIN.y, BOX_MIN.z);
+            ImGui::Text("Box Max: (%.2f, %.2f, %.2f)", 
+                       BOX_MAX.x, BOX_MAX.y, BOX_MAX.z);
+            ImGui::Text("PI Value: %.2f", M_PI);
+            
+            // Editable parameters (if they're modifiable in simulator)
+            static float smoothingRadius = SMOOTHING_RADIUS;
+            static float particleMass = PARTICLE_MASS;
+            static float restDensity = REST_DENSITY;
+            static float pressureConstant = PRESSURE_CONSTANT;
+            static float viscosityConstant = VISCOSITY_CONSTANT;
+            static float gravity = GRAVITY;
+            static float bounceDamping = BOUNCE_DAMPING;
+            static float timeStep = TIME_STEP;
+            
+            if (ImGui::DragFloat("Smoothing Radius", &smoothingRadius, 0.001f, 0.01f, 100.0f, "%.4f"))
+            {
+                // Update simulator if parameter is modifiable
+                // simulator.setSmoothingRadius(smoothingRadius);
+                SMOOTHING_RADIUS = smoothingRadius;
+            }
+            
+            if (ImGui::DragFloat("Particle Mass", &particleMass, 0.01f, 0.001f, 100.0f, "%.4f"))
+            {
+                // simulator.setParticleMass(particleMass);
+                PARTICLE_MASS = particleMass;
+            }
+            
+            if (ImGui::DragFloat("Rest Density", &restDensity, 10.0f, 100.0f, 5000.0f, "%.1f"))
+            {
+                // simulator.setRestDensity(restDensity);
+                REST_DENSITY = restDensity;
+            }
+            
+            if (ImGui::DragFloat("Pressure Constant", &pressureConstant, 1.0f, 0.0f, 1000.0f, "%.1f"))
+            {
+                // simulator.setPressureConstant(pressureConstant);
+                PRESSURE_CONSTANT = pressureConstant;
+            }
+            
+            if (ImGui::DragFloat("Viscosity Constant", &viscosityConstant, 0.001f, 0.0f, 1.0f, "%.4f"))
+            {
+                // simulator.setViscosityConstant(viscosityConstant);
+                VISCOSITY_CONSTANT = viscosityConstant;
+            }
+            
+            if (ImGui::DragFloat("Gravity", &gravity, 0.1f, -20.0f, 0.0f, "%.2f"))
+            {
+                // simulator.setGravity(gravity);
+                GRAVITY = gravity;
+            }
+            
+            if (ImGui::DragFloat("Bounce Damping", &bounceDamping, 0.01f, 0.0f, 1.0f, "%.2f"))
+            {
+                // simulator.setBounceDamping(bounceDamping);
+                BOUNCE_DAMPING = bounceDamping;
+            }
+            
+            if (ImGui::DragFloat("Time Step", &timeStep, 0.0001f, 0.0001f, 0.1f, "%.4f"))
+            {
+                // simulator.setTimeStep(timeStep);
+                TIME_STEP = timeStep;
+            }
+            
+            // Reset button
+            if (ImGui::Button("Reset to Defaults"))
+            {
+                smoothingRadius = SMOOTHING_RADIUS;
+                particleMass = PARTICLE_MASS;
+                restDensity = REST_DENSITY;
+                pressureConstant = PRESSURE_CONSTANT;
+                viscosityConstant = VISCOSITY_CONSTANT;
+                gravity = GRAVITY;
+                bounceDamping = BOUNCE_DAMPING;
+                timeStep = TIME_STEP;
+                
+                // Reset simulator parameters
+                // simulator.resetParameters();
+            }
+            
+            // Simulation controls
+            ImGui::Separator();
+            ImGui::Text("Simulation Controls");
+            
+            static bool isPaused = false;
+            if (ImGui::Button(isPaused ? "Resume" : "Pause"))
+            {
+                isPaused = !isPaused;
+                // simulator.setPaused(isPaused);
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Reset Simulation"))
+            {
+                // simulator.reset();
+            }
+            
+            // Performance info
+            ImGui::Separator();
+            ImGui::Text("Performance");
+            ImGui::Text("Particles: %d", PARTICLE_COUNT);
+            // Add more performance stats if available
+        }
+
+        // Model Controls
+        if (ImGui::CollapsingHeader("Model Controls"))
+        {
+            ImGui::Text("Model Position");
+            if (ImGui::DragFloat3("Position", modelPosition, 0.01f, -10.0f, 10.0f))
+            {
+                // Update model position
+                transMat = matrix_makeTranslation(modelPosition[0], modelPosition[1], modelPosition[2]);
+            }
+            
+            ImGui::Text("Model Rotation");
+            ImGui::DragFloat3("Rotation (degrees)", modelRotation, 1.0f, -180.0f, 180.0f);
+        }
+        
+        // Camera Controls
+        if (ImGui::CollapsingHeader("Camera Controls"))
+        {
+            ImGui::Text("Camera Position");
+            ImGui::DragFloat3("Camera Pos", cameraPosition, 0.01f, -10.0f, 10.0f);
+            
+            ImGui::Text("Camera Rotation");
+            ImGui::DragFloat("Yaw (degrees)", &cameraYaw, 1.0f, -180.0f, 180.0f);
+            
+            if (ImGui::Button("Reset Camera"))
+            {
+                vCamera = {0, 0, 0};
+                fYaw = 0.0f;
+            }
+        }
+        
+        // Lighting Controls
+        if (ImGui::CollapsingHeader("Lighting"))
+        {   
+            ImGui::ColorEdit3("Light Color", lightColor);
+            ImGui::Text("Light Direction");
+            ImGui::DragFloat3("Direction", lightDirection, 0.01f, -1.0f, 1.0f);
+            ImGui::DragFloat("specular strength", &specularStrength, 0.01f, 0.0f, 10.0f);
+            ImGui::DragFloat("ambient strength", &ambientStrength, 0.01f, 0.0f, 1.0f);
+            
+            ImGui::Text("Visualization");
+            ImGui::ColorEdit3("Background Color", backgroundColor);
+        }
+        
+        // Render Stats
+        if (ImGui::CollapsingHeader("Statistics"))
+        {
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
+                        1000.0f / ImGui::GetIO().Framerate, 
+                        ImGui::GetIO().Framerate);
+            ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", 
+                        vCamera.x, vCamera.y, vCamera.z);
+            ImGui::Text("Camera Yaw: %.2f degrees", fYaw * 180.0f / PI);
+        }
+        
+        // Help
+        if (ImGui::CollapsingHeader("Help"))
+        {
+            ImGui::Text("Camera Controls:");
+            ImGui::BulletText("W/S: Move camera up/down");
+            ImGui::BulletText("A/D: Move camera left/right");
+            ImGui::BulletText("Up/Down Arrow: Move forward/back");
+            ImGui::BulletText("Left/Right Arrow: Rotate camera");
+            ImGui::Separator();
+            ImGui::Text("UI Controls:");
+            ImGui::BulletText("Click and drag sliders to adjust values");
+            ImGui::BulletText("Check 'Show Demo Window' for more ImGui examples");
+        }
+        
+        ImGui::Separator();
+        ImGui::Checkbox("Show Demo Window", &showDemoWindow);
+        
+        ImGui::End();
+    }
+
+    // Rendering
+    ImGui::Render();
+}
+void checkGLError(const char* context) {
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        std::cerr << "OpenGL error in " << context << ": " << error << std::endl;
+    }
+}
+void renderloop(GLFWwindow* window, shader gfxShader, SPHSimulator& simulator)
 {   
-    //player input
+    // Player input (only if ImGui isn't capturing mouse/keyboard)
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard)
+    {
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            vCamera.y += 0.03f;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            vCamera.y -= 0.03f;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            vCamera.x += 0.03f;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            vCamera.x -= 0.03f;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        vCamera.y += 0.1f;
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        vCamera.y -= 0.1f;
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        vCamera.x += 0.1f;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        vCamera.x -= 0.1f;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            fYaw -= 2.0f * (PI / 180.0f);
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            fYaw += 2.0f * (PI / 180.0f);
+        vec3f camForwardV = vector_mul(lookDir, 0.01f);
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            vCamera = vector_sub(vCamera, camForwardV);
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            vCamera = vector_add(vCamera, camForwardV);
+    }
 
-    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        fYaw -= 2.0f * (PI / 180.0f);
-    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        fYaw += 2.0f * (PI / 180.0f);
-    vec3f camForwardV = vector_mul(lookDir, 0.01f);
-    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-        vCamera = vector_add(vCamera, camForwardV);
-    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-        vCamera = vector_sub(vCamera, camForwardV);
-    
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(backgroundColor[0], backgroundColor[1], backgroundColor[2], 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glUseProgram(shaderProgram);
-
-
-    float glMat[16] = {
-        projMat.m[0][0], projMat.m[0][1], projMat.m[0][2], projMat.m[0][3],
-        projMat.m[1][0], projMat.m[1][1], projMat.m[1][2], projMat.m[1][3],
-        projMat.m[2][0], projMat.m[2][1], projMat.m[2][2], projMat.m[2][3],
-        projMat.m[3][0], projMat.m[3][1], projMat.m[3][2], projMat.m[3][3]
-    };
-
-    int projLoc = glGetUniformLocation(shaderProgram, "projection");
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glMat);
-    fTheta += 0.1; 
-    mat4x4 modelMat, rotXMat, transMat;
-
-
-    rotXMat = matrix_makeRotationY(fTheta * 0.5f);
-    transMat = matrix_makeTranslation(0.0, 0, -1.0f); 
+    simulator.step();
+    gfxShader.use();
+    fTheta += 0.1;
+    rotXMat = matrix_makeRotationY(0);
+    transMat = matrix_makeTranslation(modelPosition[0], modelPosition[1], modelPosition[2]); 
     
-    modelMat = matrix_makeIdentity();
-    // order is Scale -> Rot -> Trans (SRT)
-    modelMat = matrix_matmul(rotXMat, transMat);
-
-    light_direction = vector_normalize(light_direction);
+    model = matrix_makeIdentity();
+    model = transMat;
+    
     mat4x4 matCamRot = matrix_makeRotationY(fYaw);
     vec3f LookatTarget = {0,0,1};
     lookDir = vectorMatMul(LookatTarget, matCamRot);
@@ -302,76 +414,72 @@ void renderloop(GLFWwindow* window, mesh& mesh, mat4x4& projMat)
     LookatTarget = vector_add(vCamera, lookDir);
 
     CameraMatrix = matrix_pointAt(vCamera, LookatTarget, up);
-    ViewMatrix = matrix_quickInvert(CameraMatrix);
-    for (triangle tri : mesh.tris)
+    view = matrix_quickInvert(CameraMatrix);
+    
+    auto setMat = [&](const char* name, const mat4x4& M)
     {
-        triangle projectedTri, transformedTri, viewedTri;
-        //transform
-        transformedTri.p[0] = vectorMatMul(tri.p[0], modelMat); 
-        transformedTri.p[1] = vectorMatMul(tri.p[1], modelMat); 
-        transformedTri.p[2] = vectorMatMul(tri.p[2], modelMat); 
-
-        //then apply view transformation
-        viewedTri.p[0] = vectorMatMul(transformedTri.p[0], ViewMatrix);
-        viewedTri.p[1] = vectorMatMul(transformedTri.p[1], ViewMatrix);
-        viewedTri.p[2] = vectorMatMul(transformedTri.p[2], ViewMatrix);
-
-        // Then project
-
-        // Use Cross-Product to get surface normal
-        vec3f normal, line1, line2;
-
-        line1 = vector_sub(viewedTri.p[1], viewedTri.p[0]);
-        line2 = vector_sub(viewedTri.p[2], viewedTri.p[0]);
-        normal = vector_cross(line1, line2);
-
-        // It's normally normal to normalise the normal
-        normal = vector_normalize(normal);
-        //if (normal.z < 0)
-        //float normal_ddp = vector_dot(normal, d);
-        vec3f camRay = vector_sub(transformedTri.p[0], vCamera);
-        if(vector_dot(normal, camRay) < 0.0f)
+        float m[16] = 
         {
+            M.m[0][0], M.m[0][1], M.m[0][2], M.m[0][3],
+            M.m[1][0], M.m[1][1], M.m[1][2], M.m[1][3],
+            M.m[2][0], M.m[2][1], M.m[2][2], M.m[2][3],
+            M.m[3][0], M.m[3][1], M.m[3][2], M.m[3][3]
+        };
 
-            // How similar is normal to light direction
-			float dp = vector_dot(normal, light_direction);
-			//color
+        //glUniformMatrix4fv(glGetUniformLocation(shaderProgram, name), 1, GL_FALSE, m);
+        gfxShader.setMat4(name, m);
+    };
+    setMat("model", model);
+    setMat("view", view);
+    setMat("projection", projection);
 
-            // cull backfaces first
-            // to do this we need to get the surface normals of each tri
-            // normal can be computed as the cross product of two line segments in a tri
-            // then we project only if normal dot view_dir > 0
-            projectedTri.p[0] = vectorMatMul(viewedTri.p[0], projMat); 
-            projectedTri.p[1] = vectorMatMul(viewedTri.p[1], projMat); 
-            projectedTri.p[2] = vectorMatMul(viewedTri.p[2], projMat); 
 
-            projectedTri.p[0] = vector_div(projectedTri.p[0], projectedTri.p[0].w);
-            projectedTri.p[1] = vector_div(projectedTri.p[1], projectedTri.p[1].w);
-            projectedTri.p[2] = vector_div(projectedTri.p[2], projectedTri.p[2].w);
-            // draw
-            float vertices[] = {
-                projectedTri.p[0].x, projectedTri.p[0].y, projectedTri.p[0].z, dp,
-                projectedTri.p[1].x, projectedTri.p[1].y, projectedTri.p[1].z, dp,
-                projectedTri.p[2].x, projectedTri.p[2].y, projectedTri.p[2].z, dp
-            };
-            
-            
-            
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gTex0);
 
-            // Bind VAO and update vertex data
-            glBindVertexArray(VAO);
-            glBindBuffer(GL_ARRAY_BUFFER, VBO);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-            
-            // Draw the triangle with fill mode (not wireframe)
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-            glDrawArrays(GL_TRIANGLES, 0, 3);
+    gfxShader.setFloat3("uLightDirection",lightDirection[0], lightDirection[1], lightDirection[2]);
+    gfxShader.setFloat3("lightColor",lightColor[0], lightColor[1], lightColor[2]);
+    gfxShader.setFloat3("viewPos", cameraPosition[0], cameraPosition[1], cameraPosition[2]);
+    gfxShader.setFloat("specularStrength", specularStrength);
+    gfxShader.setFloat("ambientStrength", ambientStrength);
+    gfxShader.setInt("uTex0", 0);
+    
+    
+    gMesh.draw();
 
-        }
+    glDepthFunc(GL_LEQUAL); // Allow particles to blend with existing geometry
+
+    // DEBUG: Check if particle buffer is valid
+    GLuint particleBuffer = simulator.getParticleBuffer();
+    if (particleBuffer == 0) {
+        std::cout << "ERROR: Particle buffer is 0!" << std::endl;
+    } else {
+        GLint bufferSize;
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+        glGetBufferParameteriv(GL_SHADER_STORAGE_BUFFER, GL_BUFFER_SIZE, &bufferSize);
+        //std::cout << "Particle buffer size: " << bufferSize << " bytes, expected: " 
+        //          << (PARTICLE_COUNT * sizeof(Particle)) << " bytes" << std::endl;
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
+
+
+    particleRenderer.render(simulator.getParticleBuffer(), PARTICLE_COUNT, view, projection);
+    checkGLError("particleRenderer.render");
+    glDepthFunc(GL_LESS); // Restore default depth function
+    
+    // Render ImGui on top
+    renderImGui();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+void cleanupImGui()
+{
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 }
 int main()
-{
+{   
+    
     if (!glfwInit())
     {
         cout << "Failed to initialize GLFW" << endl;
@@ -379,12 +487,12 @@ int main()
     }
 
     glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window;
-    window = glfwCreateWindow(Width, Height, "Renderer", NULL, NULL);
+    window = glfwCreateWindow(Width, Height, "NGine", NULL, NULL);
     if (window == NULL)
     {
         cout << "Failed to open GLFW window" << endl;
@@ -401,25 +509,31 @@ int main()
     glViewport(0, 0, Width, Height);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    setupOpenGL();
-    mesh mesh;
-    mat4x4 projMat;
-    initialize(mesh, projMat);
-    glEnable(GL_DEPTH_TEST);
+    
+    
+    setupImGui(window);
+    shader gfxShader = setupOpenGL();
+    initialize();
+    
+    // simulation
+    SPHSimulator simulator;
+    particleRenderer.init();
+    // Enable vsync
+    glfwSwapInterval(1);
 
     while(!glfwWindowShouldClose(window))
     {
-        
-        renderloop(window, mesh, projMat);
+        renderloop(window, gfxShader, simulator);
         glfwSwapBuffers(window);
-
         glfwPollEvents();    
     }
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    glDeleteProgram(shaderProgram);
-
+    // Cleanup
+    cleanupImGui();
+    gMesh.destroy();
+    if (gTex0) glDeleteTextures(1, &gTex0);
+    gfxShader.deleteProgram();
+    glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
 }

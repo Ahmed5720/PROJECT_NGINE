@@ -1,0 +1,162 @@
+#pragma once
+#include <strstream>
+#include <fstream>
+#include <vector>
+#include "miniVM.h"
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+using namespace std;
+struct Vertex {
+    float px, py, pz;
+    float nx, ny, nz;
+    float u,v;
+};
+struct triangle
+{   
+    vec3f p[3]; 
+    triangle()
+    {
+        p[0];
+        p[1];
+        p[2];
+    }
+    triangle(vec3f a, vec3f b, vec3f c)
+    {
+        p[0] = a;
+        p[1] = b;
+        p[2] = c;
+    }
+    triangle(float x1, float y1, float z1,
+             float x2, float y2, float z2,
+             float x3, float y3, float z3)
+    {
+        p[0] = vec3f(x1,y1,z1);
+        p[1] = vec3f(x2,y2,z2);
+        p[2] = vec3f(x3,y3,z3);
+    }
+};
+struct mesh
+{
+	vector<triangle> tris;
+
+	bool LoadFromObjectFile(string sFilename)
+	{
+		ifstream f(sFilename);
+		if (!f.is_open())
+			return false;
+
+		// Local cache of verts
+		vector<vec3f> verts;
+
+		while (!f.eof())
+		{
+			char line[128];
+			f.getline(line, 128);
+
+			strstream s;
+			s << line;
+
+			char junk;
+
+			if (line[0] == 'v')
+			{
+				vec3f v;
+				s >> junk >> v.x >> v.y >> v.z;
+				verts.push_back(v);
+			}
+
+			if (line[0] == 'f')
+			{
+				int f[3];
+				s >> junk >> f[0] >> f[1] >> f[2];
+				tris.push_back({ verts[f[0] - 1], verts[f[1] - 1], verts[f[2] - 1] });
+			}
+		}
+
+		return true;
+	}
+
+    void recenterMesh(mesh& m)
+    {
+        if (m.tris.empty()) return;
+
+        vec3f minv( 1e9f,  1e9f,  1e9f);
+        vec3f maxv(-1e9f, -1e9f, -1e9f);
+
+        for (const auto& t : m.tris)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                const vec3f& v = t.p[i];
+                minv.x = std::min(minv.x, v.x);
+                minv.y = std::min(minv.y, v.y);
+                minv.z = std::min(minv.z, v.z);
+                maxv.x = std::max(maxv.x, v.x);
+                maxv.y = std::max(maxv.y, v.y);
+                maxv.z = std::max(maxv.z, v.z);
+            }
+        }
+
+        vec3f center(
+            (minv.x + maxv.x) * 0.5f,
+            (minv.y + maxv.y) * 0.5f,
+            (minv.z + maxv.z) * 0.5f
+        );
+
+        for (auto& t : m.tris)
+            for (int i = 0; i < 3; i++)
+                t.p[i] = vector_sub(t.p[i], center);
+    }
+
+};
+struct MeshGPU
+{
+    GLuint vao = 0, vbo = 0, ebo = 0;
+    GLsizei indexCount = 0;
+
+    void upload(const std::vector<Vertex>& verts, const std::vector<uint32_t>& indices)
+    {
+       indexCount = (GLsizei)indices.size();
+       glGenVertexArrays(1, &vao);
+       glGenBuffers(1, &vbo);
+       glGenBuffers(1, &ebo);
+       
+       glBindVertexArray(vao);
+
+       glBindBuffer(GL_ARRAY_BUFFER, vbo);
+       glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(Vertex), verts.data(), GL_STATIC_DRAW);
+
+       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+       glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint32_t), indices.data(), GL_STATIC_DRAW);
+
+       // position
+       glEnableVertexAttribArray(0);
+       glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,sizeof(Vertex), (void*) 0);
+
+       // normal
+       glEnableVertexAttribArray(1);
+       glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (3 * sizeof(float)));
+
+
+       //uv
+       glEnableVertexAttribArray(2);
+       glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (6 * sizeof(float)));
+
+       glBindVertexArray(0);
+       
+    }
+
+    void draw() const {
+        glBindVertexArray(vao);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+    }
+
+    void destroy() {
+        if (ebo) glDeleteBuffers(1, &ebo);
+        if (vbo) glDeleteBuffers(1, &vbo);
+        if (vao) glDeleteVertexArrays(1, &vao);
+        vao = vbo = ebo = 0;
+        indexCount = 0;
+    }
+
+};

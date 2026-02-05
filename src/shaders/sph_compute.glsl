@@ -1,5 +1,3 @@
-#version 430 core
-
 // ============================================================================
 // SHADER CONFIGURATION
 // ============================================================================
@@ -11,29 +9,20 @@
 // 5. INTEGRATE - Update particle positions and velocities
 // ============================================================================
 
-// Define which shader stage to compile
-#ifdef COMPUTE_HASH
+
+
 layout(local_size_x = 64) in;
-#elif defined(BUILD_CELL_INDEX)
-layout(local_size_x = 64) in;
-#elif defined(COMPUTE_DENSITY)
-layout(local_size_x = 64) in;
-#elif defined(COMPUTE_FORCES)
-layout(local_size_x = 64) in;
-#elif defined(INTEGRATE)
-layout(local_size_x = 64) in;
-#endif
 
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
 
 struct Particle {
-    vec3 position;
-    float life;
+    vec4 position;
     vec4 color;
-    vec3 velocity;
-    float _pad;
+    vec4 velocity;
+    float life;
+    vec3 _padLife;
 };
 
 struct SPHData {
@@ -65,7 +54,7 @@ struct SimParams {
     vec3 boxMax;
     float spikyConstant;
     
-    vec3 gridDim;      // Grid dimensions
+    ivec3 gridDim;      // Grid dimensions
     float cellSize;     // Cell size (= smoothing radius)
     
     uint tableSize;     // Hash table size
@@ -172,7 +161,7 @@ void main() {
     uint i = gl_GlobalInvocationID.x;
     if (i >= params.particleCount) return;
     
-    vec3 pos = particles[i].position;
+    vec3 pos = particles[i].position.xyz;
     particleHashes[i] = hashPosition(pos);
     particleIndices[i] = i;  // Will be sorted alongside hashes on CPU
 }
@@ -217,12 +206,10 @@ void main() {
 #ifdef COMPUTE_DENSITY
 
 void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= params.particleCount) return;
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= params.particleCount) return;
     
-    uint i = particleIndices[idx];
-    vec3 posA = particles[i].position;
-    
+    vec3 posA = particles[i].position.xyz;
     float density = 0.0;
     ivec3 cellA = getGridCell(posA);
     
@@ -232,20 +219,21 @@ void main() {
             for (int dz = -1; dz <= 1; dz++) {
                 ivec3 neighborCell = cellA + ivec3(dx, dy, dz);
                 
-                // Check bounds
-                if (any(lessThan(neighborCell, ivec3(0))) || 
-                    any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
-                    continue;
-                }
+                // if (any(lessThan(neighborCell, ivec3(0))) || 
+                //     any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
+                //     continue;
+                // }
                 
                 uint hash = hashCell(neighborCell);
                 uint start = cellStart[hash];
                 uint end = cellEnd[hash];
                 
-                // Check all particles in this cell
-                for (uint idx2 = start; idx2 < end; idx2++) {
-                    uint j = particleIndices[idx2];
-                    vec3 posB = particles[j].position;
+                // Skip empty cells
+                if (start >= params.particleCount) continue;
+                
+                for (uint idx = start; idx < end && idx < params.particleCount; idx++) {
+                    uint j = particleIndices[idx];
+                    vec3 posB = particles[j].position.xyz;
                     vec3 diff = posA - posB;
                     float r2 = dot(diff, diff);
                     
@@ -257,7 +245,7 @@ void main() {
         }
     }
     
-    density = max(1e-6, density);
+    density = max(density, params.restDensity * 0.01); // Minimum density threshold
     sphData[i].density = density;
     sphData[i].pressure = params.pressureConstant * (density - params.restDensity);
 }
@@ -271,12 +259,11 @@ void main() {
 #ifdef COMPUTE_FORCES
 
 void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= params.particleCount) return;
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= params.particleCount) return;
     
-    uint i = particleIndices[idx];
-    vec3 posA = particles[i].position;
-    vec3 velA = particles[i].velocity;
+    vec3 posA = particles[i].position.xyz;
+    vec3 velA = particles[i].velocity.xyz;
     float densityA = sphData[i].density;
     float pressureA = sphData[i].pressure;
     
@@ -289,21 +276,23 @@ void main() {
             for (int dz = -1; dz <= 1; dz++) {
                 ivec3 neighborCell = cellA + ivec3(dx, dy, dz);
                 
-                if (any(lessThan(neighborCell, ivec3(0))) || 
-                    any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
-                    continue;
-                }
-                
+                // if (any(lessThan(neighborCell, ivec3(0))) || 
+                //     any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
+                //     continue;
+                // }
+                //force+= vec3(10, 10,10);
                 uint hash = hashCell(neighborCell);
                 uint start = cellStart[hash];
                 uint end = cellEnd[hash];
                 
-                for (uint idx2 = start; idx2 < end; idx2++) {
-                    uint j = particleIndices[idx2];
+                if (start >= params.particleCount) continue;
+                
+                for (uint idx = start; idx < end && idx < params.particleCount; idx++) {
+                    uint j = particleIndices[idx];
                     if (i == j) continue;
                     
-                    vec3 posB = particles[j].position;
-                    vec3 velB = particles[j].velocity;
+                    vec3 posB = particles[j].position.xyz;
+                    vec3 velB = particles[j].velocity.xyz;
                     float densityB = sphData[j].density;
                     float pressureB = sphData[j].pressure;
                     
@@ -311,18 +300,15 @@ void main() {
                     float r2 = dot(diff, diff);
                     float r = sqrt(r2);
                     
-                    if (r > 0.0 && r < params.smoothingRadius) {
+                    if (r > 1e-6 && r < params.smoothingRadius) {
                         vec3 rNorm = diff / r;
                         
                         // Pressure force
-                        float pressureTerm = pressureA / (densityA * densityA) + 
-                                            pressureB / (densityB * densityB);
-                        vec3 pressureForce = -params.mass * pressureTerm * 
-                                            spikyGradient(r, rNorm);
+                        float pressureTerm = (pressureA + pressureB) / (2.0 * densityB);
+                        vec3 pressureForce = -params.mass * pressureTerm  *  spikyGradient(r, rNorm);
                         
                         // Viscosity force
-                        vec3 viscosityForce = (1.0 / densityB) * (velB - velA) * 
-                                             viscosityKernel(r);
+                        vec3 viscosityForce = params.mass * (velB - velA) / densityB * viscosityKernel(r);
                         
                         force += pressureForce + params.viscosityConstant * viscosityForce;
                     }
@@ -343,19 +329,23 @@ void main() {
 #ifdef INTEGRATE
 
 void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= params.particleCount) return;
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= params.particleCount) return;
     
-    uint i = particleIndices[idx];
-    
-    vec3 pos = particles[i].position;
-    vec3 vel = particles[i].velocity;
+    vec3 pos = particles[i].position.xyz;
+    vec3 vel = particles[i].velocity.xyz;
     vec3 force = sphData[i].force;
     float density = sphData[i].density;
     
+    // Prevent division by zero
+    if (density < 1e-6) {
+        density = params.restDensity;
+    }
+    
     // Apply gravity and SPH forces
-    vec3 gravity = vec3(0.0, params.gravity * params.mass, 0.0);
-    vel += params.dt * (force / density + gravity);
+    vec3 acceleration =  force / density;
+    vec3 gravity = vec3(0.0, params.gravity, 0.0);
+    vel += params.dt * (acceleration + gravity);
     pos += params.dt * vel;
     
     // Boundary collisions
@@ -383,8 +373,8 @@ void main() {
         vel.z = -abs(vel.z) * params.bounce;
     }
     
-    particles[i].position = pos;
-    particles[i].velocity = vel;
+    particles[i].position.xyz = pos;
+    particles[i].velocity.xyz = vel;
 }
 
 #endif

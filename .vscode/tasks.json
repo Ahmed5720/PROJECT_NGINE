@@ -3,16 +3,33 @@
 	"tasks": [
         {
             "type": "cppbuild",
-            "label": "C/C++: g++.exe build active file",
+            "label": "Build Project with ImGui",
             "command": "g++",
             "args": [
                 "-g",
                 "-std=c++17",
                 "-I${workspaceFolder}/include",
+                "-I${workspaceFolder}/include/imgui",  // Add ImGui include path
                 "-L${workspaceFolder}/lib",
+                
+                
                 "${workspaceFolder}/src/main.cpp",
                 "${workspaceFolder}/src/glad.c",
+                "${workspaceFolder}/src/stb_image.h",
+                
+                // ImGui source files
+                "${workspaceFolder}/src/imgui.cpp",
+                "${workspaceFolder}/src/imgui_draw.cpp",
+                "${workspaceFolder}/src/imgui_widgets.cpp",
+                "${workspaceFolder}/src/imgui_tables.cpp",
+                "${workspaceFolder}/src/imgui_impl_glfw.cpp",
+                "${workspaceFolder}/src/imgui_impl_opengl3.cpp",
+                
+                // Libraries
                 "-lglfw3dll",
+                "-lopengl32",  // Windows OpenGL library
+                
+                // Output
                 "-o",
                 "${workspaceFolder}/cutable.exe"
             ],
@@ -25,8 +42,7 @@
             "group": {
                 "kind": "build",
                 "isDefault": true
-            },
-            "detail": "compiler: C:/C:/path/to/g++.exe"
+            }
         }
     ]
 }

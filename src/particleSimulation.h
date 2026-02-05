@@ -7,23 +7,23 @@
 #include <cmath>
 #include <fstream>
 #include <sstream>
-
+#include "shader.h"
 // ============================================================================
 // CONSTANTS AND CONFIGURATION
 // ============================================================================
 
-const int PARTICLE_COUNT = 5000;
-const float SMOOTHING_RADIUS = 0.05f;
-const float PARTICLE_MASS = 0.02f;
-const float REST_DENSITY = 1000.0f;
-const float PRESSURE_CONSTANT = 200.0f;
-const float VISCOSITY_CONSTANT = 0.01f;
-const float GRAVITY = -9.8f;
-const float BOUNCE_DAMPING = 0.5f;
-const float TIME_STEP = 0.001f;
-const float M_PI = 3.14;
-const vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
-const vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
+ const int PARTICLE_COUNT = 1000;
+ float SMOOTHING_RADIUS = 0.5f;
+ float PARTICLE_MASS = 1.0f;
+ float REST_DENSITY = 1000.0f;
+ float PRESSURE_CONSTANT = 200.0f;
+ float VISCOSITY_CONSTANT = 0.01f;
+ float GRAVITY = -9.8f;
+ float BOUNCE_DAMPING = 0.5f;
+ float TIME_STEP = 0.01f;
+ float M_PI = 3.14;
+ vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
+ vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
 
 // Hash grid parameters
 const int HASH_TABLE_SIZE = 16384;  // Should be prime or power of 2
@@ -32,13 +32,14 @@ const int HASH_TABLE_SIZE = 16384;  // Should be prime or power of 2
 // DATA STRUCTURES
 // ============================================================================
 
-struct Particle {
-    vec3f position;
-    float life;
-    vec3f color;
-    vec3f velocity;
-    float _pad;
+struct alignas(16) Particle {
+    vec3f position;   // x,y,z,w (already 16 bytes)
+    vec3f color;      // x,y,z,w (treat w as alpha)
+    vec3f velocity;   // x,y,z,w
+    float life;       // 4 bytes
+    float _padLife[3];// pad to 16 bytes
 };
+static_assert(sizeof(Particle) == 64, "Particle must be 64 bytes");
 
 struct SPHData {
     float density;
@@ -69,7 +70,7 @@ struct SimParams {
     vec3f boxMax;
     float spikyConstant;
     
-    vec3f gridDim;
+    vec3i gridDim;
     float cellSize;
     
     uint32_t tableSize;
@@ -80,36 +81,6 @@ struct SimParams {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-std::string loadShaderSource(const std::string& filepath) {
-    std::ifstream file(filepath);
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
-}
-
-GLuint compileComputeShader(const std::string& source, const std::string& define) {
-    GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
-    std::string fullSource = "#version 430 core\n#define " + define + "\n" + source;
-    const char* src = fullSource.c_str();
-    
-    glShaderSource(shader, 1, &src, nullptr);
-    glCompileShader(shader);
-    
-    GLint success;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        char infoLog[512];
-        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-        std::cerr << "Shader compilation failed (" << define << "):\n" << infoLog << std::endl;
-    }
-    
-    GLuint program = glCreateProgram();
-    glAttachShader(program, shader);
-    glLinkProgram(program);
-    glDeleteShader(shader);
-    
-    return program;
-}
 
 float poly6Constant(float h) {
     return 315.0f / (64.0f * M_PI * std::pow(h, 9));
@@ -121,6 +92,7 @@ float spikyConstant(float h) {
 
 vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
     vec3f extent = vector_sub(boxMax, boxMin);
+    //cout << "grid dim is" << std::ceil(extent.x / cellSize) << std::ceil(extent.y / cellSize) << std::ceil(extent.z / cellSize);
     return vec3i(
         std::ceil(extent.x / cellSize),
         std::ceil(extent.y / cellSize),
@@ -131,7 +103,12 @@ vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
 // ============================================================================
 // SPH SIMULATOR CLASS
 // ============================================================================
-
+void checkComputeError(const char* stage) {
+    GLenum err = glGetError();
+    if (err != GL_NO_ERROR) {
+        std::cerr << "OpenGL error in " << stage << ": " << err << std::endl;
+    }
+}
 class SPHSimulator {
 public:
     SPHSimulator() {
@@ -155,38 +132,74 @@ public:
         glDeleteProgram(computeForcesProgram);
         glDeleteProgram(integrateProgram);
     }
+
+    GLuint getParticleBuffer() const { return particleBuffer; }
     
     void step() {
-        // Stage 1: Compute spatial hash for each particle
+
+        SimParams params;
+        params.dt = TIME_STEP;
+        params.bounce = BOUNCE_DAMPING;
+        params.particleCount = PARTICLE_COUNT;
+        params.gravity = GRAVITY;
+        params.smoothingRadius = SMOOTHING_RADIUS;
+        params.smoothingRadius2 = SMOOTHING_RADIUS * SMOOTHING_RADIUS;
+        params.mass = PARTICLE_MASS;
+        params.restDensity = REST_DENSITY;
+        params.pressureConstant = PRESSURE_CONSTANT;
+        params.viscosityConstant = VISCOSITY_CONSTANT;
+        params.boxMin = BOX_MIN;
+        params.boxMax = BOX_MAX;
+        params.poly6Constant = poly6Constant(SMOOTHING_RADIUS);
+        params.spikyConstant = spikyConstant(SMOOTHING_RADIUS);
+        params.cellSize = SMOOTHING_RADIUS;
+        params.gridDim = calculateGridDimensions(BOX_MIN, BOX_MAX, SMOOTHING_RADIUS);
+        params.tableSize = HASH_TABLE_SIZE;
+     
+        glBindBuffer(GL_UNIFORM_BUFFER, paramsUBO);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(SimParams), &params, GL_STATIC_DRAW);
+
+        //Stage 1: Compute spatial hash for each particle
         glUseProgram(computeHashProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
+        checkComputeError("COMPUTE_HASH");
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         
-        // Stage 2: Sort particles by hash on CPU
+        //Stage 2: Sort particles by hash on CPU
         sortParticlesByHash();
         
         // Stage 3: Build cell start/end indices
         glUseProgram(buildCellIndexProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
+        checkComputeError("COMPUTE_HASH");
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         
         // Stage 4: Compute density and pressure
         glUseProgram(computeDensityProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
+        checkComputeError("COMPUTE_HASH");
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         
         // Stage 5: Compute forces
         glUseProgram(computeForcesProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
+        checkComputeError("COMPUTE_HASH");
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         
         // Stage 6: Integrate positions and velocities
         glUseProgram(integrateProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
+        checkComputeError("COMPUTE_HASH");
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+        GLenum err = glGetError();
+        if (err != GL_NO_ERROR) {
+            std::cerr << "OpenGL error after dispatch: " << err << std::endl;
+        }
+
     }
     
-    GLuint getParticleBuffer() const { return particleBuffer; }
+  
     
 private:
     GLuint particleBuffer;
@@ -275,7 +288,7 @@ private:
         params.poly6Constant = poly6Constant(SMOOTHING_RADIUS);
         params.spikyConstant = spikyConstant(SMOOTHING_RADIUS);
         params.cellSize = SMOOTHING_RADIUS;
-        params.gridDim = vec3f(calculateGridDimensions(BOX_MIN, BOX_MAX, SMOOTHING_RADIUS));
+        params.gridDim = calculateGridDimensions(BOX_MIN, BOX_MAX, SMOOTHING_RADIUS);
         params.tableSize = HASH_TABLE_SIZE;
         
         glGenBuffers(1, &paramsUBO);
@@ -288,14 +301,27 @@ private:
     }
     
     void initializeShaders() {
-        // Load shader source (you would load from file in practice)
-        std::string shaderSource = loadShaderSource("sph_compute.glsl");
         
-        computeHashProgram = compileComputeShader(shaderSource, "COMPUTE_HASH");
-        buildCellIndexProgram = compileComputeShader(shaderSource, "BUILD_CELL_INDEX");
-        computeDensityProgram = compileComputeShader(shaderSource, "COMPUTE_DENSITY");
-        computeForcesProgram = compileComputeShader(shaderSource, "COMPUTE_FORCES");
-        integrateProgram = compileComputeShader(shaderSource, "INTEGRATE");
+        const char* shaderPath = "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\sph_compute.glsl";
+        shader computeHash(shaderPath,"COMPUTE_HASH", 0);
+        computeHashProgram = computeHash.ID;
+
+        shader buildCellIndexShader(shaderPath, "BUILD_CELL_INDEX", 0);
+        buildCellIndexProgram = buildCellIndexShader.ID;
+        
+        shader computeDensityShader(shaderPath, "COMPUTE_DENSITY", 0);
+        computeDensityProgram = computeDensityShader.ID;
+
+        shader computeForcesShader(shaderPath, "COMPUTE_FORCES", 0);
+        computeForcesProgram = computeForcesShader.ID;
+
+        shader integrateShader(shaderPath, "INTEGRATE" , 0);
+        integrateProgram = integrateShader.ID;
+
+        if (!computeHashProgram || !buildCellIndexProgram || !computeDensityProgram || !computeForcesProgram || !integrateProgram) {
+            std::cerr << "One or more compute programs failed.\n";
+         //   std::exit(1);
+        }
         
         // Bind buffers to all programs
         auto bindBuffers = [&](GLuint program) {
@@ -332,9 +358,10 @@ private:
                         BOX_MIN.y + 0.1f + y * spacing,
                         BOX_MIN.z + 0.1f + z * spacing
                     );
-                    particles[idx].velocity = vec3f(0.0f,0.0f,0.0f);
-                    particles[idx].color = vec3f(0.3f, 0.5f, 1.0f, 1.0f);
+                    particles[idx].velocity = vec3f(0.01f,0.0f,0.0f,0.0f);
+                    particles[idx].color = vec3f(1.0f, 1.0f, 1.0f, 1.0f);
                     particles[idx].life = 1.0f;
+                    particles[idx]._padLife[0] = particles[idx]._padLife[1] = particles[idx]._padLife[2] = 0.0f;
                     idx++;
                 }
             }
@@ -391,52 +418,3 @@ private:
     }
 };
 
-// ============================================================================
-// MAIN APPLICATION
-// ============================================================================
-
-int main() {
-    // Initialize GLFW
-    if (!glfwInit()) {
-        std::cerr << "Failed to initialize GLFW" << std::endl;
-        return -1;
-    }
-    
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "SPH Fluid Simulation", nullptr, nullptr);
-    if (!window) {
-        std::cerr << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
-        return -1;
-    }
-    
-    glfwMakeContextCurrent(window);
-    
-    // Initialize GLEW
-    glewExperimental = GL_TRUE;
-    if (glewInit() != GLEW_OK) {
-        std::cerr << "Failed to initialize GLEW" << std::endl;
-        return -1;
-    }
-    
-    // Create simulator
-    SPHSimulator simulator;
-    
-    // Main loop
-    while (!glfwWindowShouldClose(window)) {
-        // Run simulation steps
-        for (int i = 0; i < 5; i++) {  // Multiple substeps per frame
-            simulator.step();
-        }
-        
-        
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-    
-    glfwTerminate();
-    return 0;
-}

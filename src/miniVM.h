@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include <cmath>
 
@@ -19,6 +20,12 @@ struct vec3i
         x = _x;
         y = _y;
         z = _z;
+    }
+    vec3i()
+    {
+        x = 0;
+        y = 0;
+        z = 0;
     }
 };
 struct vec3f
