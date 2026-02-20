@@ -6,6 +6,19 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 using namespace std;
+
+// spherical harmonics parameters for gaussian splats (determines color)
+// spherical harmonics are a set of othrogonal functions that we can use to model high dimensional relationships
+// for our purposes, the 0th degree function models a base color
+// the later degrees determined view dependent effects (reflections)
+// it would be very costly to include all 4 degrees in our buffer especially since we are sending it to the gpu. and there's minimal difference visually anyway
+// so we are only using degrees 0,1
+// Degree 0: 1 coefficient * r,g,b
+// Degree 1: 3 coefficients * r,g,b
+// total = 12 floats / gaussian to represent color. not bad
+static constexpr int SH_DEGREE = 1;
+static constexpr int SH_COEFFS_PER_CHANNEL = 4;
+static constexpr int SH_TOTAL_FLOATS = SH_COEFFS_PER_CHANNEL * 3;
 struct Vertex {
     float px, py, pz;
     float nx, ny, nz;
@@ -159,4 +172,12 @@ struct MeshGPU
         indexCount = 0;
     }
 
+};
+// the asstute observer should note that Gaussians are not actual geometry.
+struct Gaussian{
+    vec3f pos;  // world space
+    vec4f rot;  //  rot_0 to rot_3 -> x,y,z,w (quaternion)
+    vec3f scale;   // in log space, actual scale = exp(scale)
+    float opacity; // logit space opacity , actual opacity = sigmoid(opacity)
+    float sh[SH_TOTAL_FLOATS];
 };

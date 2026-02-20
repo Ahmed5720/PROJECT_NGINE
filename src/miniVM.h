@@ -11,6 +11,11 @@ struct vec2f
         x = 0;
         y = 0;
     }
+    vec2f(float _x, float _y)
+    {
+        x = _x;
+        y = _y;
+    }
 };
 struct vec3i
 {
@@ -30,13 +35,14 @@ struct vec3i
 };
 struct vec3f
 {
-    float x,y,z,w = 1.0f;
+    //float x,y,z,w = 1.0f;
+    float x,y,z;
     vec3f()
     {
         x = 0;
         y = 0;
         z = 0;
-        w = 1.0f;
+       // w = 1.0f;
     }
     vec3f(float _x, float _y, float _z)
     {
@@ -49,15 +55,34 @@ struct vec3f
         x = _x;
         y = _y;
         z = _z;
-        w = _w; 
+     //   w = _w; 
     }
     vec3f(vec3i vi)
     {
         x = float(vi.x);
         y = float(vi.y);
         z = float(vi.z);
+     //   w = 1.0f;
+    }
+};
+struct vec4f
+{
+    float x,y,z,w = 1.0f;
+    vec4f()
+    {
+        x = 0;
+        y = 0;
+        z = 0;
         w = 1.0f;
     }
+    vec4f(float _x, float _y, float _z, float _w)
+    {
+        x = _x;
+        y = _y;
+        z = _z;
+     //   w = _w; 
+    }
+
 };
 vec3f& operator+=(vec3f& v1, const vec3f& v2)
 {
@@ -106,6 +131,10 @@ vec3f vector_cross(vec3f vec1, vec3f vec2)
 float vector_dot(const vec3f &vec1, const vec3f &vec2)
 {
     return vec1.x * vec2.x +  vec1.y * vec2.y + vec1.z * vec2.z;
+}
+float vector_dot(const vec4f &vec1, const vec4f &vec2)
+{
+    return vec1.x * vec2.x +  vec1.y * vec2.y + vec1.z * vec2.z + vec1.w * vec2.w;
 }
 float vector_length(vec3f &v)
 {

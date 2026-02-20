@@ -16,6 +16,9 @@
 #include "particleSimulation.h"
 #include "shader.h"
 #include "ParticleRenderer.h"
+#include "ply_loader.h"
+#include "3DGS_renderer.h"
+#include "sort.h"
 using namespace std; 
 
 const int Height = 1200;
@@ -120,7 +123,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 }
-void initialize()
+void initialize(vector<Gaussian>& gaussians, AppArgs& args)
 {
     
     std::vector<Vertex> verts; 
@@ -139,6 +142,13 @@ void initialize()
     {
         cout << "failed to load texture\n";
         exit(1);
+    }
+
+    // load ply for 3dgs if using 3dgs
+    gaussians = load_ply(args.ply_path);
+    if (gaussians.empty()) {
+        std::cerr << "[Main] No Gaussians loaded, exiting.\n";
+        return 1;
     }
     
 }
@@ -370,9 +380,9 @@ void checkGLError(const char* context) {
         std::cerr << "OpenGL error in " << context << ": " << error << std::endl;
     }
 }
-void renderloop(GLFWwindow* window, shader gfxShader, SPHSimulator& simulator)
+void renderloop(GLFWwindow* window, shader gfxShader, SPHSimulator& simulator, GaussianRenderer gaussianRenderer, vector<int>& gaussians)
 {   
-    // Player input (only if ImGui isn't capturing mouse/keyboard)
+    // input (only if ImGui isn't capturing mouse/keyboard)
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantCaptureKeyboard)
     {
@@ -447,6 +457,8 @@ void renderloop(GLFWwindow* window, shader gfxShader, SPHSimulator& simulator)
     
     gMesh.draw();
 
+    vector<int> sorted_indices = compute_sorted_indices(gaussians, view);
+    gaussianRenderer.render(gaussians, sorted_indices, cam);
     glDepthFunc(GL_LEQUAL); // Allow particles to blend with existing geometry
 
     // DEBUG: Check if particle buffer is valid
@@ -477,9 +489,10 @@ void cleanupImGui()
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
-int main()
+int main(int argc, char** argv)
 {   
     
+    AppArgs args = parse_args(argc, argv);
     if (!glfwInit())
     {
         cout << "Failed to initialize GLFW" << endl;
@@ -518,6 +531,9 @@ int main()
     // simulation
     SPHSimulator simulator;
     particleRenderer.init();
+
+    GaussianRenderer gaussianRenderer;
+    gaussianRenderer.init();
     // Enable vsync
     glfwSwapInterval(1);
 
