@@ -1,42 +1,11 @@
+* # NGine: Deep-Dive Analysis
 
 
-# PROJECT NGINE
+This document covers **design choices and architecture**, **implementation details and maths** for the SPH fluid simulation and Gaussian splatting renderer, and a **Q&A discussion**.
 
-The long term aspiration of this project is to become a small 3D engine that supports features I consider interesting Like importing models, basic mesh editing, particle simulation, Rigid body physics, rasterization and raytracing and perhaps eventually gaussian splatting. A specific aspect I intend to focus on is performing as much computation as possible on the GPU. As one might expect from the lack of structure of this project, the intention is not to produce a functionining product but purely to satisfy my curiosity.
+---
 
-## Features
-
-- A small ad-hoc matrix/vector library that performs all nessicary matrix/vector math.  
-- OBJ, PLY model loading  
-- rasterization pipeline: 
-- phong shading, texture sampling.
-- SPH fluid simulation
-- Gaussian Splatting (WIP)  
-![Alt text](media/teapot.png "rasterizer")
-
-
-## Smoothed particle hydrodynamics fluid simulation
-
-![Alt text](media/psimsnap.png "simulation")
-
-In this project we created a fluid simulation using smoothed particle hydrodynamics.  
-based on this paper:
-
-For a few particles the task, is fairly trivial as it can be computed on the cpu. However as soon as soon as we require more than a few hundred particles, the CPU struggles to maintain 60FPS as the pressure Force on each particle calculation requires checking every other particle.  
-Therefore, we implement a spatial hashgrid to optimize neighbor search. The goal of the spatial hashgrid, is to allow us to only search neihboring particles for each particle, by partitioning particles into cells. Each cell is given a hash value. Particles are stored in a buffer. in a seperate buffer we store the keys to each particle, and we sort them by that key such that all particles in the same cell are stored consequitively. Finally a 3rd Buffer stores the starting indices of each cell which allows us to retrieve them immediately.
-
-```cpp
-particle Buffer: [0,1,3,4,5,6,7,8,9,10,11]
-
-spatialKeys Buffer: [0,0,0,1,1,2,2,2,2,3,3]  
-                      ^      ^   ^       ^  
-                     cell 0 Cell 1      Cell 3
-
-
-spatialOffsets Buffer: [0,3,5,9]
-                       C0,C1,C2,C3 starting indices
-```
-## Part 1: Architecture
+## Part 1: Architecture and Design Choices
 
 ### 1.1 High-Level Structure
 
@@ -48,9 +17,14 @@ The engine is structured as:
 - **Camera** – Position, yaw (radians), up vector, FOV. Produces view matrix via look-at + invert and projection via a custom perspective helper.
 - **RenderPipeline** – Given scene and simulator, performs a fixed draw order: clear → Phong mesh → (optional) Gaussian splats → particles → ImGui. It also runs the ImGui control panels and syncs them with the scene.
 
-**approach:** One application, one scene, one pipeline, explicit ownership (Application owns subsystems, Scene owns mesh/Gaussians/camera). No ECS, no generic “entity” list.
+**Chosen approach:** One application, one scene, one pipeline, explicit ownership (Application owns subsystems, Scene owns mesh/Gaussians/camera). No ECS, no generic “entity” list.
 
+**Alternatives that could have been chosen:**
 
+- **ECS (Entity Component System):** Entities for mesh, point cloud, fluid, camera; components for transform, mesh, splat data, etc. More flexible for many object types and systems, but heavier for a small, fixed feature set.
+- **Global state:** No Application/Scene; globals for camera, mesh, and renderers (as in the original pre-refactor code). Simpler to wire up but harder to test, reuse, or run multiple views.
+- **Renderer abstraction:** Interface `IRenderer` with `render(Scene&)`, with Phong, Gaussian, and particle as implementations. Would make adding new pass types cleaner at the cost of extra indirection and boilerplate for a small number of passes.
+- **Config file:** Load window size, paths, and default PLY from JSON/INI instead of only CLI and code defaults. Better for non-developers; the current design keeps everything in code and one CLI flag.
 
 ### 1.2 Rendering Pipeline Order
 
@@ -62,6 +36,13 @@ Fixed sequence each frame:
 4. **Particle pass** – Blend, depth test (LEQUAL), no depth write; points from SSBO.
 5. **ImGui** – On top.
 
+**Choice:** Gaussians are drawn without depth test so that the mesh’s depth buffer does not cull them; correctness of transparency is delegated entirely to **sorting** (back-to-front). Particles are drawn after Gaussians and use depth so they can occlude or blend with the scene.
+
+**Alternatives:**
+
+- **Depth test on for Gaussians:** Would cull splats behind the mesh; could be desired for “inside room” scenes but would hide splats that should be visible behind geometry when the camera is outside.
+- **Depth write on for Gaussians:** Would prevent later splats from blending correctly where they overlap; the current “no depth write” preserves correct alpha blending at the cost of not writing depth for splats.
+- **GPU sort for Gaussians:** Would allow depth test and possibly depth write with a sorted buffer; the project chose CPU sort to avoid GPU sort implementation and buffer management.
 
 ### 1.3 Ownership and Lifetimes
 
@@ -71,7 +52,7 @@ Fixed sequence each frame:
 
 **Choice:** Central ownership in Application, no shared ownership (no `shared_ptr`). Scene is a single coherent state object.
 
-
+**Alternatives:** RenderPipeline could own the renderers and shaders; Scene could hold optional/pointer to simulator; or a separate “Simulation” object could own SPH and expose only the particle buffer.
 
 ### 1.4 Math Library (miniVM)
 
@@ -79,7 +60,7 @@ Fixed sequence each frame:
 - **Rationale:** No dependency, full control, and a single convention inside the C++ code.
 - **OpenGL interaction:** Shaders expect column-major matrices. The Gaussian renderer (and any code that uploads matrices to GL) **transposes** when building the float array: columns of the logical matrix are written as consecutive floats so that `glUniformMatrix4fv(..., GL_FALSE, data)` matches the GLSL layout. The Phong path may still pass row-major data; consistency with the shader’s expectation should be verified per pass.
 
-
+**Alternatives:** Use GLM or Eigen; then all math and uploads would follow one library’s convention. Would simplify matrix handling and reduce bugs at the cost of a dependency.
 
 ---
 
@@ -142,7 +123,7 @@ W_{\text{visc}}(r) = -\frac{r^3}{2h^3} + \frac{r^2}{h^2} + \frac{h}{2r} - 1
 
 **Goal:** For each particle \(i\), only sum over particles \(j\) with \(|\mathbf{x}_i - \mathbf{x}_j| < h\) (or within a few cells of the same size).
 
-**approach:**
+**Chosen approach:**
 
 1. **Hash grid:** Space is divided into cells of size `cellSize` (= \(h\)). Cell index is \(\lfloor (\mathbf{x} - \text{boxMin}) / h \rfloor\). A **spatial hash** maps 3D cell indices to a 1D bucket index: `hash = (cell.x*p1 ^ cell.y*p2 ^ cell.z*p3) % tableSize` with large primes, so particles in the same cell get the same hash.
 2. **COMPUTE_HASH:** For each particle, write its hash and its particle index into `particleHashes[]` and `particleIndices[]` (initially identity).
@@ -150,7 +131,13 @@ W_{\text{visc}}(r) = -\frac{r^3}{2h^3} + \frac{r^2}{h^2} + \frac{h}{2r} - 1
 4. **BUILD_CELL_INDEX:** In one pass over the sorted array, for each distinct hash write the first and one-past-last index into `cellStart[hash]` and `cellEnd[hash]`. So for any cell hash we get a range into the **sorted** array.
 5. **COMPUTE_DENSITY / COMPUTE_FORCES:** For particle \(i\), get its cell and the 27 neighboring cells (3×3×3). For each neighbor cell hash, iterate from `cellStart[hash]` to `cellEnd[hash]`; for each sorted index `idx`, set `j = particleIndices[idx]` and use `particles[j].position` (and other fields). So the **particle buffer is never reordered**; only hash and index buffers are sorted. The index buffer is the indirection “sorted slot → original particle.”
 
+**Why CPU sort:** Keeps the GPU pipeline simple (no GPU sort or radix sort), and for moderate particle counts the cost is acceptable. The main cost is the GPU–CPU readback and CPU sort each frame.
 
+**Alternatives:**
+
+- **GPU sort (e.g. radix sort by hash):** Would avoid readback and allow much larger particle counts; requires a GPU sort implementation and possibly reordering the particle buffer so that spatially close particles are contiguous in memory (better cache use in density/force).
+- **Uniform grid:** If the domain is a regular grid, cell index could be a 3D index and cells could be stored in a 3D texture or buffer; no hash collisions but needs a fixed grid and more memory for sparse regions.
+- **Brute force:** Loop over all pairs. \(O(N^2)\); only acceptable for very small \(N\).
 
 ### 2.4 Pipeline Stages and Buffers
 
@@ -160,7 +147,7 @@ W_{\text{visc}}(r) = -\frac{r^3}{2h^3} + \frac{r^2}{h^2} + \frac{h}{2r} - 1
 
 **Design choice:** Multiple small compute programs compiled from the same GLSL file with different `#define` (e.g. `COMPUTE_HASH`, `BUILD_CELL_INDEX`, …). Keeps shared structs and bindings in one place.
 
-### 2.5 Force Formulation
+### 2.5 Force Formulation (Code-Level)
 
 In COMPUTE_FORCES, for each pair \((i,j)\) within range:
 
@@ -260,7 +247,53 @@ So the project uses **only** degrees 0 and 1 (4 coefficients per channel, 12 per
 - **Draw:** The Gaussian renderer builds a GPU buffer of splats in that order and draws one instanced quad per splat. So the **draw order** is back-to-front.
 - **Blending:** With depth test off and depth write off, later (closer) splats are blended over earlier (farther) ones, giving correct over-compositing for alpha.
 
+**Alternatives:**
+
+- **Tile-based rasterization (e.g. 3DGS-style):** Sort splats per tile and render in tiles; more complex but can reduce overdraw and allow depth.
+- **GPU sort:** Sort by depth on the GPU so the CPU doesn’t need to read back; would scale better for very large splat counts.
+- **Depth buffer for splats:** Write depth when drawing splats and use depth test; would require a consistent ordering (e.g. front-to-back with a different blend or a single pass that writes depth and then resolves color).
 
 ### 3.7 PLY Loading
 
 The loader expects **binary_little_endian** PLY with per-vertex properties: `x,y,z`, `opacity`, `scale_0,1,2`, `rot_0..rot_3`, `f_dc_0,1,2`, and optionally `f_rest_0..8` for degree-1 SH. It fills the `Gaussian` struct (and thus the GPU layout) with position, quaternion, log-scale, logit opacity, and 12 SH coefficients; higher-degree SH in the PLY are ignored.
+
+---
+
+## Part 4: Q&A Discussion
+
+**Q: Why is the SPH sort done on the CPU instead of the GPU?**  
+**A:** The design prioritizes simplicity: a single readback of hash and index, `std::sort` by hash, then upload. GPU radix sort would avoid readback and scale better for large \(N\), but would require implementing and maintaining a GPU sort and possibly reordering the particle buffer for better cache behavior. For moderate particle counts (e.g. hundreds to low thousands), the CPU sort cost is often acceptable.
+
+**Q: Why use a hash grid instead of a uniform 3D grid?**  
+**A:** A hash grid uses a fixed 1D table (e.g. 16384 entries) regardless of domain size; cells are mapped by a hash function, so memory use is bounded and independent of world size. A uniform grid would need a 3D array of size proportional to (box extent / cell size)^3, which can be huge for large or uneven domains. Hash collisions (multiple cells mapping to the same bucket) are handled by the same start/end range; the iteration over that range still only considers particles that were hashed to that bucket, and spatial coherence is maintained by the 3×3×3 neighbor search.
+
+**Q: Why are Gaussians drawn with depth test disabled?**  
+**A:** So that every splat contributes to the image where it projects, and blending order is controlled purely by the CPU sort (back-to-front). If depth test were on, the mesh (and earlier geometry) would occlude splats behind it; for a “point cloud over the scene” look, that would hide many splats. Disabling depth test and depth write keeps the implementation simple and ensures correct alpha blending by draw order.
+
+**Q: What is the “quick invert” used for the view matrix?**  
+**A:** The view matrix is built as a **look-at** matrix (camera position, target, up). That matrix transforms from **world to camera** in a specific layout (right, up, forward, position columns). Its inverse is the “camera to world” matrix. For the **view** matrix we need world → camera, which is the inverse of that camera-to-world matrix. The “quick invert” exploits the fact that for a rigid body (rotation + translation), the inverse is the transpose of the 3×3 block plus a translation derived from that. So we get the correct view matrix without a general 4×4 invert.
+
+**Q: Why store scale and opacity in log and logit space?**  
+**A:** So that optimization (during training of the 3DGS model) can update them without constraints: \(\exp\) and \(\sigma\) (sigmoid) map \(\mathbb{R}\) to \((0,+\infty)\) and \((0,1)\), so the parameters can be updated freely and the rendered values stay valid. The runtime (and this renderer) just apply \(\exp\) and \(\sigma\) in the shader.
+
+**Q: Why only SH degree 0 and 1?**  
+**A:** Degree 0 gives view-independent color; degree 1 adds basic view-dependent variation (e.g. sheen). Higher degrees improve quality but increase storage (e.g. 48+ floats per splat for degree 2) and bandwidth. The project chose a minimal set (12 floats per splat) to keep the buffer small and the shader simple while still getting view-dependent color.
+
+**Q: How does BUILD_CELL_INDEX work if multiple cells hash to the same bucket?**  
+**A:** After the sort, the array is ordered by **hash value**, not by cell. So all particles with hash \(H\) are contiguous; then for each **unique** hash value we see in order, we set `cellStart[H]` and `cellEnd[H]`. If two different 3D cells hash to the same \(H\), they are merged into one range: we’d iterate over particles from both cells when we query that hash. That’s a **hash collision**; it only adds extra work (checking a few more particles and rejecting them by distance), not incorrect results. Using a large table and good primes keeps collisions relatively rare.
+
+**Q: Why is the particle buffer never reordered after the sort?**  
+**A:** The sort orders **(hash, original_index)**. The GPU only needs to know “for this cell hash, which particle indices fall in this range.” So we only need the **index** buffer sorted by hash; when we iterate neighbors we use `particleIndices[idx]` to read from the **original** particle buffer. Reordering the particle buffer would require either a full GPU reorder (more complex) or writing back sorted positions/velocities from the CPU (extra copy). Keeping particles in place and using an indirection buffer is the minimal change that enables fast neighbor search.
+
+**Q: What would break if view/projection were passed row-major to the Gaussian shader?**  
+**A:** GLSL expects column-major. If we passed row-major data and told GL “don’t transpose,” the shader would effectively use the **transpose** of the intended matrices. Then `u_view * position` would be wrong (wrong rotation and translation), so splats would project to wrong places, the 2D covariance would be wrong (wrong W and Jacobian), and the view direction for SH would be wrong. So we’d get wrong positions, wrong shapes, and wrong colors. Uploading in column-major (transposing from the C++ row-major storage when building the float array) fixes this.
+
+**Q: Could the Phong and Gaussian passes share the same matrix layout?**  
+**A:** Yes. If the Phong shader is written to use the same column-major convention as GLSL’s default, then both passes should upload matrices in the same way (e.g. column-major float array from the same row-major `mat4x4`). Right now the Phong path may still be passing row-major; making both paths use the same “row-major in C, column-major to GL” convention would avoid subtle bugs and make the codebase consistent.
+
+**Q: What is the role of the regularizer (e.g. +0.3) on the 2D covariance?**  
+**A:** When the splat is viewed almost edge-on, one eigenvalue of \(\mathbf{\Sigma}_{2D}\) can become very small, so the inverse blows up and the Gaussian becomes extremely narrow (needle-like). That can cause numerical issues and visual artifacts. Adding a small constant to the diagonal (e.g. 0.3 to \(a\) and \(c\)) keeps the minimum eigenvalue bounded, so the inverse stays stable and the splat remains at least slightly spread in both directions.
+
+---
+
+*End of deep-dive analysis. For implementation details, refer to the source files and shaders listed in the sections above.*
