@@ -104,11 +104,11 @@ struct mat4x4
     float m[4][4] = {0};
 };
 
-vec3f vector_add(vec3f& vec1, vec3f& vec2)
+vec3f vector_add(const vec3f& vec1, const vec3f& vec2)
 {
     return {vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z};
 }
-vec3f vector_sub(vec3f& vec1, vec3f& vec2)
+vec3f vector_sub(const vec3f& vec1, const vec3f& vec2)
 {
     return {vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z};
 }
@@ -136,24 +136,23 @@ float vector_dot(const vec4f &vec1, const vec4f &vec2)
 {
     return vec1.x * vec2.x +  vec1.y * vec2.y + vec1.z * vec2.z + vec1.w * vec2.w;
 }
-float vector_length(vec3f &v)
+float vector_length(const vec3f& v)
 {
     return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
-vec3f vector_normalize(vec3f vec1)
+vec3f vector_normalize(const vec3f& vec1)
 {
     float l = vector_length(vec1);
     return {vec1.x / l, vec1.y/ l, vec1.z / l};
 }
 
 
-vec3f vectorMatMul(vec3f& v, mat4x4& m)
-{   
+vec3f vectorMatMul(const vec3f& v, const mat4x4& m)
+{
     vec3f o;
     o.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
     o.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
     o.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
-    o.w = v.x * m.m[0][3] + v.y * m.m[1][3] + v.z * m.m[2][3] + m.m[3][3];
     return o;
 }
 
@@ -222,7 +221,7 @@ mat4x4 matrix_makeProjection(float fovDeg, float aspect, float zNear, float zFar
     return m;
 }
 
-mat4x4 matrix_pointAt(vec3f &pos, vec3f &target, vec3f &up)
+mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f& up)
 {      
     // Calculate new forward direction
     vec3f forward = vector_sub(target, pos);
@@ -260,7 +259,7 @@ mat4x4 matrix_pointAt(vec3f &pos, vec3f &target, vec3f &up)
     return matrix;
 }
 
-mat4x4 matrix_quickInvert(mat4x4 &m)
+mat4x4 matrix_quickInvert(const mat4x4& m)
 {
     mat4x4 matrix;
     matrix.m[0][0] = m.m[0][0]; matrix.m[0][1] = m.m[1][0]; matrix.m[0][2] = m.m[2][0]; matrix.m[0][3] = 0.0f;
@@ -273,7 +272,7 @@ mat4x4 matrix_quickInvert(mat4x4 &m)
     return matrix;
 }
 
-mat4x4 matrix_matmul(mat4x4 &m1, mat4x4& m2)
+mat4x4 matrix_matmul(const mat4x4& m1, const mat4x4& m2)
 {   
     mat4x4 res;
     for (int r = 0; r < 4; r++)

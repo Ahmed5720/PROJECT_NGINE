@@ -181,3 +181,11 @@ struct Gaussian{
     float opacity; // logit space opacity , actual opacity = sigmoid(opacity)
     float sh[SH_TOTAL_FLOATS];
 };
+
+// GPU-friendly layout for instanced rendering (matches shader attribute layout).
+struct GaussianGPU {
+    vec4f position_opacity;  // xyz = position, w = opacity (logit)
+    vec4f rot;               // quaternion
+    vec4f scale;             // xyz = log scale, w = unused
+    vec4f sh[3];              // SH coeffs per channel (R, G, B)
+};

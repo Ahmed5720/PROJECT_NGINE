@@ -1,6 +1,7 @@
 #pragma once
 #include <glad/glad.h>
 #include <vector>
+#include <string>
 #include "shader.h"
 #include "geometry.h"
 
@@ -10,6 +11,7 @@ public:
     ~ParticleRenderer();
     
     void init();
+    void init(const std::string& vertexPath, const std::string& fragmentPath);
     void render(GLuint particleBuffer, int particleCount, const mat4x4& view, const mat4x4& projection);
     
 private:
@@ -29,19 +31,14 @@ ParticleRenderer::~ParticleRenderer() {
 }
 
 void ParticleRenderer::init() {
-    // Create and compile particle shader
-    particleShader = new shader(
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\particle.vs",
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\particle.fs"
-    );
-    
+    init("shaders/particle.vs", "shaders/particle.fs");
+}
+
+void ParticleRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
+    particleShader = new shader(vertexPath.c_str(), fragmentPath.c_str());
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
-
-    // Needed for gl_PointSize from shader in core profile
     glEnable(GL_PROGRAM_POINT_SIZE);
-    // glEnable(GL_POINT_SMOOTH);
-    // glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 }
 
 void ParticleRenderer::render(GLuint particleBuffer, int particleCount, 

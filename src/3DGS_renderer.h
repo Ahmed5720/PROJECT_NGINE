@@ -1,39 +1,42 @@
 /*
-    rasterizes a set of gaussians loaded as a ply file
-
-    each gaussian is rasterized as a quad
-    vertex shader performs projection first computes 3d covariance from pos/rot/scale data stored in the buffer then projects to 2d covariance then we need to compute eigenvectors
-    to get quad axes and radius.
-    A CPU sort is performed std sort which is a quick sort-ish implementation. this is important so the fragment shader can perform correct alpha blending (back to front)
-    fragment shader determines alpha/colors based on alpha + sh coefficients
+    Rasterizes a set of Gaussians loaded from a PLY file.
+    Each Gaussian is rasterized as a quad. Vertex shader computes 3D covariance from
+    pos/rot/scale, projects to 2D, then quad axes/radius. CPU sort (back-to-front) is
+    used for correct alpha blending. Fragment shader uses opacity + SH coefficients.
 */
-pragma once
+#pragma once
 #include "miniVM.h"
 #include <glad/glad.h>
 #include <vector>
 #include "shader.h"
 #include "geometry.h"
-
-using mat3f = mat4x4; // haha
-using mat2f = mat4x4;
+#include <cmath>
+#include <string>
 
 
 class GaussianRenderer
 {
-    public: 
-        GaussianRenderer();
-        ~GaussianRenderer();
+public:
+    GaussianRenderer();
+    ~GaussianRenderer();
 
-        void init();
-        void render(vector<Gaussian>& Gaussians, vector<int>& sorted_indices, int campos);
-    private:
-        GLuint VAO;
-        GLuint VBO;
-        shader* gaussianShader; 
-        int m_width  = 0;
-        int m_height = 0;
-        // Scratch buffer reused each frame to avoid re-allocating
-        vector<GaussianGPU> m_gpu_buffer; 
+    void init();
+    void init(const std::string& vertexPath, const std::string& fragmentPath);
+    // Renders Gaussians in sorted order. view/proj in column-major (same as miniVM).
+    // viewportW/H and fovDeg are used for u_viewport and u_focal.
+    void render(const std::vector<Gaussian>& gaussians,
+                const std::vector<int>& sorted_indices,
+                const mat4x4& view,
+                const mat4x4& proj,
+                int viewportW,
+                int viewportH,
+                float fovDeg);
+
+private:
+    GLuint VAO = 0;
+    GLuint VBO = 0;
+    shader* gaussianShader = nullptr;
+    std::vector<GaussianGPU> m_gpu_buffer;
 };
 
 // Build a GaussianGPU from a Gaussian (applies exp/sigmoid activations).
@@ -59,6 +62,8 @@ static GaussianGPU to_gpu(const Gaussian& g) {
 }
 
 
+GaussianRenderer::GaussianRenderer() = default;
+
 GaussianRenderer::~GaussianRenderer()
 {
     if (VAO) glDeleteVertexArrays(1, &VAO);
@@ -66,15 +71,12 @@ GaussianRenderer::~GaussianRenderer()
     delete gaussianShader;
 }
 
-void GaussianRenderer::init()
-{
-    // create shaders
-    // bind vaos
-    gaussianShader = new shader(
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\gaussian.vs",
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\gaussian.fs"
-    );
-    
+void GaussianRenderer::init() {
+    init("shaders/gaussian.vs", "shaders/gaussian.fs");
+}
+
+void GaussianRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
+    gaussianShader = new shader(vertexPath.c_str(), fragmentPath.c_str());
     // --- Create VAO and VBO ---
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -110,7 +112,7 @@ void GaussianRenderer::init()
     for (int i = 0; i < 3; ++i) {
         glEnableVertexAttribArray(3 + i);
         glVertexAttribPointer(3 + i, 4, GL_FLOAT, GL_FALSE, stride,
-            (void*)(offsetof(GaussianGPU, sh) + i * sizeof(glm::vec4)));
+            (void*)(offsetof(GaussianGPU, sh) + i * sizeof(vec4f)));
         glVertexAttribDivisor(3 + i, 1);
     }
 
@@ -123,42 +125,58 @@ void GaussianRenderer::init()
 
 }
 
-void GaussianRenderer::render(vector<Gaussian>& Gaussians, vector<int>& sorted_indices, int campos)
+void GaussianRenderer::render(const std::vector<Gaussian>& gaussians,
+                              const std::vector<int>& sorted_indices,
+                              const mat4x4& view,
+                              const mat4x4& proj,
+                              int viewportW,
+                              int viewportH,
+                              float fovDeg)
 {
-    // create shaders
-    // bind vaos
     const int n = static_cast<int>(sorted_indices.size());
+    if (n == 0) return;
 
-    // --- Build sorted GPU buffer ---
+    // Build sorted GPU buffer
     m_gpu_buffer.resize(n);
     for (int i = 0; i < n; ++i) {
         m_gpu_buffer[i] = to_gpu(gaussians[sorted_indices[i]]);
     }
 
-    // Upload to GPU
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER,
                  n * sizeof(GaussianGPU),
                  m_gpu_buffer.data(),
                  GL_DYNAMIC_DRAW);
 
-    // --- Set uniforms ---
-    glUseProgram(m_program);
+    gaussianShader->use();
+    GLuint prog = gaussianShader->ID;
 
-    mat4x4 view = camera.view_matrix();
-    mat4x4 proj = camera.projection_matrix();
+    float viewMat[16] = {
+        view.m[0][0], view.m[0][1], view.m[0][2], view.m[0][3],
+        view.m[1][0], view.m[1][1], view.m[1][2], view.m[1][3],
+        view.m[2][0], view.m[2][1], view.m[2][2], view.m[2][3],
+        view.m[3][0], view.m[3][1], view.m[3][2], view.m[3][3]
+    };
+    float projMat[16] = {
+        proj.m[0][0], proj.m[0][1], proj.m[0][2], proj.m[0][3],
+        proj.m[1][0], proj.m[1][1], proj.m[1][2], proj.m[1][3],
+        proj.m[2][0], proj.m[2][1], proj.m[2][2], proj.m[2][3],
+        proj.m[3][0], proj.m[3][1], proj.m[3][2], proj.m[3][3]
+    };
+    glUniformMatrix4fv(glGetUniformLocation(prog, "u_view"), 1, GL_FALSE, viewMat);
+    glUniformMatrix4fv(glGetUniformLocation(prog, "u_proj"), 1, GL_FALSE, projMat);
 
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "u_view"), 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(glGetUniformLocation(m_program, "u_proj"), 1, GL_FALSE, glm::value_ptr(proj));
-    glUniform2f(glGetUniformLocation(m_program, "u_focal"), camera.focal_x(), camera.focal_y());
-    glUniform2f(glGetUniformLocation(m_program, "u_viewport"), (float)camera.width, (float)camera.height);
+    // Focal length from FOV and viewport (same convention as projection)
+    float fovRad = fovDeg * (3.14159265f / 180.0f);
+    float tanHalfFov = std::tan(fovRad * 0.5f);
+    float focalX = (float)viewportW / (2.0f * tanHalfFov);
+    float focalY = (float)viewportH / (2.0f * tanHalfFov);
+    glUniform2f(glGetUniformLocation(prog, "u_focal"), focalX, focalY);
+    glUniform2f(glGetUniformLocation(prog, "u_viewport"), (float)viewportW, (float)viewportH);
 
-    // --- Draw ---
     glBindVertexArray(VAO);
-    // 4 vertices per quad (TRIANGLE_STRIP), n instances (one per Gaussian)
     glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, n);
     glBindVertexArray(0);
-
 }
 
 
