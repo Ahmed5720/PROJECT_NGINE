@@ -18,9 +18,10 @@ public:
     bool init();
     void run();
 
+    void framebufferSizeCallback(int width, int height);
+
 private:
     void processInput(float dt);
-    void framebufferSizeCallback(int width, int height);
 
     Config config_;
     AppArgs args_;

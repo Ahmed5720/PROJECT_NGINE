@@ -62,8 +62,12 @@ class shader
         glDeleteShader(vertex);
         glDeleteShader(fragment);
 
-
-        
+        int linkOk = 0;
+        glGetProgramiv(ID, GL_LINK_STATUS, &linkOk);
+        if (!linkOk) {
+            glDeleteProgram(ID);
+            ID = 0;
+        }
     }
 
     shader(const char* computePath, const char* define, int c)
@@ -119,15 +123,12 @@ class shader
 
     void use()
     {
+        if (ID == 0) return;
         glUseProgram(ID);
-
-        GLenum err = glGetError();
-        if (err != GL_NO_ERROR)
-            std::cout << "OpenGL error after glUseProgram: " << err << std::endl;
     }
     void deleteProgram()
     {
-        glDeleteProgram(ID);
+        if (ID != 0) { glDeleteProgram(ID); ID = 0; }
     }
 
 

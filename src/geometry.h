@@ -1,7 +1,8 @@
 #pragma once
-#include <strstream>
+#include <sstream>
 #include <fstream>
 #include <vector>
+#include <string>
 #include "miniVM.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -66,8 +67,7 @@ struct mesh
 			char line[128];
 			f.getline(line, 128);
 
-			strstream s;
-			s << line;
+			std::istringstream s(line);
 
 			char junk;
 

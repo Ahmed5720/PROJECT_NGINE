@@ -21,27 +21,27 @@ private:
 };
 
 
-ParticleRenderer::ParticleRenderer() : particleShader(nullptr), VAO(0), VBO(0) {
+inline ParticleRenderer::ParticleRenderer() : particleShader(nullptr), VAO(0), VBO(0) {
 }
 
-ParticleRenderer::~ParticleRenderer() {
+inline ParticleRenderer::~ParticleRenderer() {
     if (VAO) glDeleteVertexArrays(1, &VAO);
     if (VBO) glDeleteBuffers(1, &VBO);
     delete particleShader;
 }
 
-void ParticleRenderer::init() {
+inline void ParticleRenderer::init() {
     init("shaders/particle.vs", "shaders/particle.fs");
 }
 
-void ParticleRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
+inline void ParticleRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
     particleShader = new shader(vertexPath.c_str(), fragmentPath.c_str());
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
     glEnable(GL_PROGRAM_POINT_SIZE);
 }
 
-void ParticleRenderer::render(GLuint particleBuffer, int particleCount, 
+inline void ParticleRenderer::render(GLuint particleBuffer, int particleCount, 
                               const mat4x4& view, const mat4x4& projection) {
     if (!particleShader || particleCount <= 0)
         return;

@@ -69,8 +69,19 @@ void RenderPipeline::render(Scene& scene,
 
     if (!scene.gaussians.empty()) {
         std::vector<int> sortedIndices = compute_sorted_indices(scene.gaussians, view);
+
+        // Gaussian splats: blend back-to-front (order from sort). No depth test so
+        // nothing is culled by the mesh depth buffer.
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        glDisable(GL_DEPTH_TEST);
+
         gaussianRenderer_->render(scene.gaussians, sortedIndices, view, projection,
                                   viewportW, viewportH, scene.camera.fovDeg);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+
     }
 
     glDepthFunc(GL_LEQUAL);

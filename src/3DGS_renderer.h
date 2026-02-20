@@ -50,7 +50,7 @@ static GaussianGPU to_gpu(const Gaussian& g) {
     gpu.rot = g.rot;
 
     // Scale stays as log — the vertex shader applies exp
-    gpu.scale = { g.scale.x, g.scale.y, g.scale.z, 0.0f };
+    gpu.scale = { g.scale.x, g.scale.y , g.scale.z, 0.0f };
 
     // Pack SH coefficients into vec4s
     // g.sh layout: [R0..R3, G0..G3, B0..B3]
@@ -62,20 +62,19 @@ static GaussianGPU to_gpu(const Gaussian& g) {
 }
 
 
-GaussianRenderer::GaussianRenderer() = default;
+inline GaussianRenderer::GaussianRenderer() = default;
 
-GaussianRenderer::~GaussianRenderer()
-{
+inline GaussianRenderer::~GaussianRenderer() {
     if (VAO) glDeleteVertexArrays(1, &VAO);
     if (VBO) glDeleteBuffers(1, &VBO);
     delete gaussianShader;
 }
 
-void GaussianRenderer::init() {
+inline void GaussianRenderer::init() {
     init("shaders/gaussian.vs", "shaders/gaussian.fs");
 }
 
-void GaussianRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
+inline void GaussianRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
     gaussianShader = new shader(vertexPath.c_str(), fragmentPath.c_str());
     // --- Create VAO and VBO ---
     glGenVertexArrays(1, &VAO);
@@ -117,24 +116,21 @@ void GaussianRenderer::init(const std::string& vertexPath, const std::string& fr
     }
 
     glBindVertexArray(0);
-
-    // --- GL state for correct alpha blending ---
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA); // premultiplied alpha
-    glDisable(GL_DEPTH_TEST);                     // rely on CPU sort order
-
+    //glEnableVertexArray(0);
+    // glEnable(GL_BLEND);
+    // glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    // glDisable(GL_DEPTH_TEST);
 }
 
-void GaussianRenderer::render(const std::vector<Gaussian>& gaussians,
-                              const std::vector<int>& sorted_indices,
-                              const mat4x4& view,
-                              const mat4x4& proj,
-                              int viewportW,
-                              int viewportH,
-                              float fovDeg)
-{
+inline void GaussianRenderer::render(const std::vector<Gaussian>& gaussians,
+                                    const std::vector<int>& sorted_indices,
+                                    const mat4x4& view,
+                                    const mat4x4& proj,
+                                    int viewportW,
+                                    int viewportH,
+                                    float fovDeg) {
     const int n = static_cast<int>(sorted_indices.size());
-    if (n == 0) return;
+    if (n == 0 || !gaussianShader || gaussianShader->ID == 0) return;
 
     // Build sorted GPU buffer
     m_gpu_buffer.resize(n);
@@ -151,12 +147,14 @@ void GaussianRenderer::render(const std::vector<Gaussian>& gaussians,
     gaussianShader->use();
     GLuint prog = gaussianShader->ID;
 
+    // Upload view/projection in row-major order
     float viewMat[16] = {
         view.m[0][0], view.m[0][1], view.m[0][2], view.m[0][3],
         view.m[1][0], view.m[1][1], view.m[1][2], view.m[1][3],
         view.m[2][0], view.m[2][1], view.m[2][2], view.m[2][3],
         view.m[3][0], view.m[3][1], view.m[3][2], view.m[3][3]
     };
+
     float projMat[16] = {
         proj.m[0][0], proj.m[0][1], proj.m[0][2], proj.m[0][3],
         proj.m[1][0], proj.m[1][1], proj.m[1][2], proj.m[1][3],

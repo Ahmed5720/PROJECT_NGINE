@@ -5,7 +5,6 @@
 #include "RenderPipeline.h"
 #include "OBJLoader.h"
 #include "ply_loader.h"
-#include "particleSimulation.h"
 #include "ParticleRenderer.h"
 #include "3DGS_renderer.h"
 #include "shader.h"

@@ -1,3 +1,4 @@
+#pragma once
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "miniVM.h"
@@ -9,24 +10,23 @@
 #include <sstream>
 #include "shader.h"
 // ============================================================================
-// CONSTANTS AND CONFIGURATION
+// CONSTANTS AND CONFIGURATION (inline for single definition when header included in multiple TUs)
 // ============================================================================
 
- const int PARTICLE_COUNT = 1000;
- float SMOOTHING_RADIUS = 0.5f;
- float PARTICLE_MASS = 1.0f;
- float REST_DENSITY = 1000.0f;
- float PRESSURE_CONSTANT = 200.0f;
- float VISCOSITY_CONSTANT = 0.01f;
- float GRAVITY = -9.8f;
- float BOUNCE_DAMPING = 0.5f;
- float TIME_STEP = 0.01f;
- float M_PI = 3.14;
- vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
- vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
+inline const int PARTICLE_COUNT = 100;
+inline float SMOOTHING_RADIUS = 0.5f;
+inline float PARTICLE_MASS = 1.0f;
+inline float REST_DENSITY = 1000.0f;
+inline float PRESSURE_CONSTANT = 200.0f;
+inline float VISCOSITY_CONSTANT = 0.01f;
+inline float GRAVITY = -9.8f;
+inline float BOUNCE_DAMPING = 0.5f;
+inline float TIME_STEP = 0.01f;
+inline float M_PI = 3.14f;
+inline vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
+inline vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
 
-// Hash grid parameters
-const int HASH_TABLE_SIZE = 16384;  // Should be prime or power of 2
+inline const int HASH_TABLE_SIZE = 16384;
 
 // ============================================================================
 // DATA STRUCTURES
@@ -82,15 +82,15 @@ struct SimParams {
 // ============================================================================
 
 
-float poly6Constant(float h) {
+inline float poly6Constant(float h) {
     return 315.0f / (64.0f * M_PI * std::pow(h, 9));
 }
 
-float spikyConstant(float h) {
+inline float spikyConstant(float h) {
     return -45.0f / (M_PI * std::pow(h, 6));
 }
 
-vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
+inline vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
     vec3f extent = vector_sub(boxMax, boxMin);
     //cout << "grid dim is" << std::ceil(extent.x / cellSize) << std::ceil(extent.y / cellSize) << std::ceil(extent.z / cellSize);
     return vec3i(
@@ -103,7 +103,7 @@ vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
 // ============================================================================
 // SPH SIMULATOR CLASS
 // ============================================================================
-void checkComputeError(const char* stage) {
+inline void checkComputeError(const char* stage) {
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {
         std::cerr << "OpenGL error in " << stage << ": " << err << std::endl;

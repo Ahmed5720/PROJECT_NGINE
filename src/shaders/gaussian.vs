@@ -95,36 +95,19 @@ vec3 invert_cov2d(float a, float b, float c) {
 }
 
 // Evaluate degree 0 + degree 1 spherical harmonics for a given view direction.
-// SH layout per channel: [DC, d1_0, d1_1, d1_2]
-// in_sh_0 = R channel, in_sh_1 = G channel, in_sh_2 = B channel
-vec3 eval_sh(vec3 view_dir) {
-    // SH basis constants:
-    //   Y_0^0 = 0.28209479177 (degree 0)
-    //   Y_1^-1 = 0.48860251190 * y
-    //   Y_1^0  = 0.48860251190 * z
-    //   Y_1^1  = 0.48860251190 * x
+// SH layout per channel: [DC, d1_0, d1_1, d1_2]; sh_r/g/b = R/G/B channel
+vec3 eval_sh(vec3 view_dir, vec4 sh_r, vec4 sh_g, vec4 sh_b) {
     const float C0 = 0.28209479177;
     const float C1 = 0.48860251190;
-
     float x = view_dir.x, y = view_dir.y, z = view_dir.z;
 
-    // Degree-0 contribution (view-independent base color)
-    vec3 color = vec3(
-        C0 * in_sh_0.x,
-        C0 * in_sh_1.x,
-        C0 * in_sh_2.x
-    );
-
-    // Degree-1 contribution (view-dependent)
+    vec3 color = vec3(C0 * sh_r.x, C0 * sh_g.x, C0 * sh_b.x);
     color += vec3(
-        C1 * (-y * in_sh_0.y + z * in_sh_0.z + -x * in_sh_0.w),
-        C1 * (-y * in_sh_1.y + z * in_sh_1.z + -x * in_sh_1.w),
-        C1 * (-y * in_sh_2.y + z * in_sh_2.z + -x * in_sh_2.w)
+        C1 * (-y * sh_r.y + z * sh_r.z - x * sh_r.w),
+        C1 * (-y * sh_g.y + z * sh_g.z - x * sh_g.w),
+        C1 * (-y * sh_b.y + z * sh_b.z - x * sh_b.w)
     );
-
-    // The SH convention adds 0.5 to bring the DC term to a neutral gray
     color += 0.5;
-
     return clamp(color, 0.0, 1.0);
 }
 
@@ -132,23 +115,19 @@ vec3 eval_sh(vec3 view_dir) {
 // Main vertex shader
 // ---------------------------------------------------------------------------
 void main() {
-    vec3 world_pos = in_position_opacity.xyz;
-    float raw_opacity = in_position_opacity.w;
+    vec3 world_pos = posOpacity.xyz;
+    float raw_opacity = posOpacity.w;
 
-    // --- Transform center to camera space ---
     vec4 cam_pos4 = u_view * vec4(world_pos, 1.0);
     vec3 cam_pos  = cam_pos4.xyz;
 
-    // Cull Gaussians behind the camera. We set the vertex to a degenerate
-    // position so the GPU discards the quad without extra draw calls.
     if (cam_pos.z >= 0.0) {
-        gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // outside clip space
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
     }
 
-    // --- Compute 3D covariance and project to 2D ---
-    vec3 real_scale = exp(in_scale.xyz);  // log → linear
-    mat3 cov3d      = compute_cov3d(real_scale, in_rotation);
+    vec3 real_scale = exp(scale.xyz);
+    mat3 cov3d      = compute_cov3d(real_scale, rotation);
     vec3 cov2d      = project_cov3d(cov3d, cam_pos, u_focal);
 
     // --- Find quad extent from eigenvalues of Σ_2D ---
@@ -195,7 +174,7 @@ void main() {
     // --- Outputs ---
     v_offset    = pixel_offset;                   // Δ in pixel space
     v_cov2d_inv = invert_cov2d(a, b, c);          // packed (a',b',c') of Σ⁻¹
-    v_color_alpha = vec4(eval_sh(view_dir), sigmoid(raw_opacity));
+    v_color_alpha = vec4(eval_sh(view_dir, sh_0, sh_1, sh_2), sigmoid(raw_opacity));
 }
 
 
