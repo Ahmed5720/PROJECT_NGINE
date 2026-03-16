@@ -38,6 +38,7 @@ spatialOffsets Buffer: [0,3,5,9]
 ```
 ## Part 1: Architecture
 
+Diagram: https://link.excalidraw.com/readonly/2ZFC8EoQpxyAGCf7Qpm9
 ### 1.1 High-Level Structure
 
 The engine is structured as:
