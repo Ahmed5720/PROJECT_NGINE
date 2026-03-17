@@ -12,7 +12,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - phong shading, texture sampling.
 - SPH fluid simulation
 - Gaussian Splatting (WIP)  
-![Alt text](media/teapot.png "rasterizer")
+![Alt text](media/BroncoScene.png "Static Scene featuring Various meshs and textures")
 
 
 ## Smoothed particle hydrodynamics fluid simulation

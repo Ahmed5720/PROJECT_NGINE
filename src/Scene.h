@@ -6,8 +6,8 @@
 struct Scene {
     Camera camera;
 
-    MeshGPU mesh;
-    GLuint textureId = 0;
+    std::vector<MeshGPU> meshes;
+    //GLuint textureId = 0;
 
     std::vector<Gaussian> gaussians;
 
@@ -20,14 +20,11 @@ struct Scene {
     float specularStrength = 0.8f;
     float ambientStrength = 0.2f;
 
-    bool showDemoWindow   = false;
+    //bool showDemoWindow   = false;
     bool showControlWindow = true;
 
     void destroy() {
-        mesh.destroy();
-        if (textureId) {
-            glDeleteTextures(1, &textureId);
-            textureId = 0;
-        }
+        for (auto &mesh : meshes)
+            mesh.destroy();
     }
 };

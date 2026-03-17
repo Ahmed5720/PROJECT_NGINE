@@ -1,96 +1,99 @@
 #pragma once
 #include <vector>
 #include <cmath>
+#define x X
+#define y Y
+#define z Z
 
-// mini vector / matrix library
+// mini vector / matrix librarY
 struct vec2f
 {
-    float x,y;
+    float X,Y;
     vec2f()
     {
-        x = 0;
-        y = 0;
+        X = 0;
+        Y = 0;
     }
-    vec2f(float _x, float _y)
+    vec2f(float _X, float _Y)
     {
-        x = _x;
-        y = _y;
+        X = _X;
+        Y = _Y;
     }
 };
 struct vec3i
 {
-    int x,y,z;
-    vec3i(int _x, int _y, int _z)
+    int X,Y,Z;
+    vec3i(int _X, int _Y, int _Z)
     {
-        x = _x;
-        y = _y;
-        z = _z;
+        X = _X;
+        Y = _Y;
+        Z = _Z;
     }
     vec3i()
     {
-        x = 0;
-        y = 0;
-        z = 0;
+        X = 0;
+        Y = 0;
+        Z = 0;
     }
 };
 struct vec3f
 {
-    //float x,y,z,w = 1.0f;
-    float x,y,z;
+    
+    float X,Y,Z,W;
     vec3f()
     {
-        x = 0;
-        y = 0;
-        z = 0;
+        X = 0;
+        Y = 0;
+        Z = 0;
        // w = 1.0f;
     }
-    vec3f(float _x, float _y, float _z)
+    vec3f(float _X, float _Y, float _Z)
     {
-        x = _x;
-        y = _y;
-        z = _z;
+        X = _X;
+        Y = _Y;
+        Z = _Z;
     }
-    vec3f(float _x, float _y, float _z, float _w)
+    vec3f(float _X, float _Y, float _Z, float _w)
     {
-        x = _x;
-        y = _y;
-        z = _z;
-     //   w = _w; 
+        X = _X;
+        Y = _Y;
+        Z = _Z;
+        W = _w; 
     }
     vec3f(vec3i vi)
     {
-        x = float(vi.x);
-        y = float(vi.y);
-        z = float(vi.z);
+        X = float(vi.X);
+        Y = float(vi.Y);
+        Z = float(vi.Z);
      //   w = 1.0f;
     }
 };
 struct vec4f
 {
-    float x,y,z,w = 1.0f;
+    float X,Y,Z,w = 1.0f;
     vec4f()
     {
-        x = 0;
-        y = 0;
-        z = 0;
+        X = 0;
+        Y = 0;
+        Z = 0;
         w = 1.0f;
     }
-    vec4f(float _x, float _y, float _z, float _w)
+    vec4f(float _X, float _Y, float _Z, float _w)
     {
-        x = _x;
-        y = _y;
-        z = _z;
+        X = _X;
+        Y = _Y;
+        Z = _Z;
      //   w = _w; 
     }
 
 };
 
 inline vec3f& operator+=(vec3f& v1, const vec3f& v2) {
-    v1.x += v2.x; v1.y += v2.y; v1.z += v2.z;
+    v1.X += v2.X; v1.Y += v2.Y; v1.Z += v2.Z;
     return v1;
 }
 inline vec3f& operator*=(vec3f& v1, const vec3f& v2) {
-    v1.x *= v2.x; v1.y *= v2.y; v1.z *= v2.z;
+    v1.X *= v2.X; v1.Y *= v2.Y; v1.Z *= v2.Z;
     return v1;
 }
 
@@ -99,48 +102,48 @@ struct mat4x4 {
 };
 
 inline vec3f vector_add(const vec3f& vec1, const vec3f& vec2) {
-    return {vec1.x + vec2.x, vec1.y + vec2.y, vec1.z + vec2.z};
+    return {vec1.X + vec2.X, vec1.Y + vec2.Y, vec1.Z + vec2.Z};
 }
 inline vec3f vector_sub(const vec3f& vec1, const vec3f& vec2) {
-    return {vec1.x - vec2.x, vec1.y - vec2.y, vec1.z - vec2.z};
+    return {vec1.X - vec2.X, vec1.Y - vec2.Y, vec1.Z - vec2.Z};
 }
 inline vec3f vector_mul(vec3f vec, float s) {
-    return {vec.x * s, vec.y * s, vec.z * s};
+    return {vec.X * s, vec.Y * s, vec.Z * s};
 }
 inline vec3f vector_div(vec3f vec, float s) {
-    return {vec.x / s, vec.y / s, vec.z / s};
+    return {vec.X / s, vec.Y / s, vec.Z / s};
 }
 inline vec3f vector_cross(vec3f vec1, vec3f vec2) {
-    return {vec1.y * vec2.z - vec1.z * vec2.y, vec1.z * vec2.x - vec1.x * vec2.z, vec1.x * vec2.y - vec1.y * vec2.x};
+    return {vec1.Y * vec2.Z - vec1.Z * vec2.Y, vec1.Z * vec2.X - vec1.X * vec2.Z, vec1.X * vec2.Y - vec1.Y * vec2.X};
 }
 inline float vector_dot(const vec3f& vec1, const vec3f& vec2) {
-    return vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z;
+    return vec1.X * vec2.X + vec1.Y * vec2.Y + vec1.Z * vec2.Z;
 }
 inline float vector_dot(const vec4f& vec1, const vec4f& vec2) {
-    return vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z + vec1.w * vec2.w;
+    return vec1.X * vec2.X + vec1.Y * vec2.Y + vec1.Z * vec2.Z + vec1.w * vec2.w;
 }
 inline float vector_length(const vec3f& v) {
-    return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    return sqrtf(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 }
 inline vec3f vector_normalize(const vec3f& vec1) {
     float l = vector_length(vec1);
-    return {vec1.x / l, vec1.y / l, vec1.z / l};
+    return {vec1.X / l, vec1.Y / l, vec1.Z / l};
 }
 inline vec3f vectorMatMul(const vec3f& v, const mat4x4& m) {
     vec3f o;
-    o.x = v.x * m.m[0][0] + v.y * m.m[1][0] + v.z * m.m[2][0] + m.m[3][0];
-    o.y = v.x * m.m[0][1] + v.y * m.m[1][1] + v.z * m.m[2][1] + m.m[3][1];
-    o.z = v.x * m.m[0][2] + v.y * m.m[1][2] + v.z * m.m[2][2] + m.m[3][2];
+    o.X = v.X * m.m[0][0] + v.Y * m.m[1][0] + v.Z * m.m[2][0] + m.m[3][0];
+    o.Y = v.X * m.m[0][1] + v.Y * m.m[1][1] + v.Z * m.m[2][1] + m.m[3][1];
+    o.Z = v.X * m.m[0][2] + v.Y * m.m[1][2] + v.Z * m.m[2][2] + m.m[3][2];
     return o;
 }
-inline mat4x4 matrix_makeIdentity() {
+inline mat4x4 matrix_makeIdentitY() {
     mat4x4 mat;
     mat.m[0][0] = mat.m[1][1] = mat.m[2][2] = mat.m[3][3] = 1.0f;
     return mat;
 }
-inline mat4x4 matrix_makeTranslation(float x, float y, float z) {
-    mat4x4 mat = matrix_makeIdentity();
-    mat.m[3][0] = x; mat.m[3][1] = y; mat.m[3][2] = z;
+inline mat4x4 matrix_makeTranslation(float X, float Y, float Z) {
+    mat4x4 mat = matrix_makeIdentitY();
+    mat.m[3][0] = X; mat.m[3][1] = Y; mat.m[3][2] = Z;
     return mat;
 }
 inline mat4x4 matrix_makeRotationX(float angleRad) {
@@ -164,12 +167,12 @@ inline mat4x4 matrix_makeRotationZ(float angleRad) {
     mat.m[2][2] = mat.m[3][3] = 1.0f;
     return mat;
 }
-inline mat4x4 matrix_makeProjection(float fovDeg, float aspect, float zNear, float zFar) {
+inline mat4x4 matrix_makeProjection(float fovDeg, float aspect, float ZNear, float ZFar) {
     float f = 1.0f / tanf(fovDeg * 0.5f * 3.1415f / 180.0f);
     mat4x4 m;
     m.m[0][0] = f / aspect; m.m[1][1] = f;
-    m.m[2][2] = (zFar + zNear) / (zNear - zFar); m.m[2][3] = -1.0f;
-    m.m[3][2] = (2 * zFar * zNear) / (zNear - zFar); m.m[3][3] = 0.0f;
+    m.m[2][2] = (ZFar + ZNear) / (ZNear - ZFar); m.m[2][3] = -1.0f;
+    m.m[3][2] = (2 * ZFar * ZNear) / (ZNear - ZFar); m.m[3][3] = 0.0f;
     return m;
 }
 inline mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f& up) {
@@ -181,23 +184,23 @@ inline mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f&
     vec3f newUp = vector_sub(up, a);
     newUp = vector_normalize(newUp);
 
-    // New Right direction is easy, its just cross product
+    // New Right direction is easY, its just cross product
     vec3f right = vector_cross(newUp, forward);
     mat4x4 matrix;
-    matrix.m[0][0] = right.x;
-    matrix.m[1][0] = up.x;
-    matrix.m[2][0] = forward.x;
-    matrix.m[3][0] = pos.x;
+    matrix.m[0][0] = right.X;
+    matrix.m[1][0] = up.X;
+    matrix.m[2][0] = forward.X;
+    matrix.m[3][0] = pos.X;
 
-    matrix.m[0][1] = right.y;
-    matrix.m[1][1] = up.y;
-    matrix.m[2][1] = forward.y;
-    matrix.m[3][1] = pos.y;
+    matrix.m[0][1] = right.Y;
+    matrix.m[1][1] = up.Y;
+    matrix.m[2][1] = forward.Y;
+    matrix.m[3][1] = pos.Y;
 
-    matrix.m[0][2] = right.z;
-    matrix.m[1][2] = up.z;
-    matrix.m[2][2] = forward.z;
-    matrix.m[3][2] = pos.z;
+    matrix.m[0][2] = right.Z;
+    matrix.m[1][2] = up.Z;
+    matrix.m[2][2] = forward.Z;
+    matrix.m[3][2] = pos.Z;
 
     matrix.m[0][3] = 0.0f;
     matrix.m[1][3] = 0.0f;

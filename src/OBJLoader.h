@@ -69,26 +69,22 @@ bool LoadOBJ_Indexed(
 
             for (int i = 0; i < 3; i++) {
                 ObjIndex ix = parseFaceToken(toks[i]);
-
-                // OBJ indices are 1-based
-                const vec3f& p = positions[ix.v - 1];
-                const auto& uv = uvs[ix.vt - 1];
-                const vec3f& n = normals[ix.vn - 1];
-
-                auto it = lut.find(ix);
-                if (it == lut.end()) {
-                    Vertex vtx;
-                    vtx.px = p.x; vtx.py = p.y; vtx.pz = p.z;
-                    vtx.nx = n.x; vtx.ny = n.y; vtx.nz = n.z;
-                    vtx.u = uv.first; vtx.v = uv.second;
-
-                    uint32_t newIndex = (uint32_t)outVerts.size();
-                    outVerts.push_back(vtx);
-                    outIdx.push_back(newIndex);
-                    lut[ix] = newIndex;
-                } else {
-                    outIdx.push_back(it->second);
+                
+                Vertex vtx;
+                vtx.px = positions[ix.v - 1].x;
+                vtx.py = positions[ix.v - 1].y;
+                vtx.pz = positions[ix.v - 1].z;
+                
+                // Get UVs
+                if (ix.vt > 0 && ix.vt <= uvs.size()) {
+                    vtx.u = uvs[ix.vt - 1].first;
+                    vtx.v = uvs[ix.vt - 1].second;
                 }
+                
+                // Get normals similarly...
+                
+                outVerts.push_back(vtx);
+                outIdx.push_back(outVerts.size() - 1);
             }
         }
     }

@@ -18,5 +18,5 @@ void main()
         alpha *= (0.5 - dist) * 10.0;
     }
     
-    FragColor = vec4(0.1, 0.1, 0.8, alpha);
+    FragColor = vec4(vColor.xyz, alpha);
 }

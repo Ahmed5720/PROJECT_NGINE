@@ -42,6 +42,7 @@ struct Config {
             if (a.back() == '/' || a.back() == '\\') return a + b;
             return a + "/" + b;
         };
+        // basepath = src
         shaderDir      = slash(basePath, "shaders");
         phongVsPath    = slash(shaderDir, "shader.vs");
         phongFsPath    = slash(shaderDir, "shader.fs");
@@ -51,7 +52,7 @@ struct Config {
         gaussianFsPath = slash(shaderDir, "gaussian.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "POT.obj");
-        texturePath    = slash(basePath, "diffuse.png");
+        objPath        = slash(objPath, "broncoScene.obj");
+        texturePath    = slash(basePath, "textures");
     }
 };

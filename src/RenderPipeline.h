@@ -23,7 +23,7 @@ public:
                 float zFar);
 
 private:
-    void renderImGui(Scene& scene, float pi);
+    void renderImGui(Scene& scene, float pi, SPHSimulator& simulator);
 
     shader* phongShader_ = nullptr;
     GaussianRenderer* gaussianRenderer_ = nullptr;

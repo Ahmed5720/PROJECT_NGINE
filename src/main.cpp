@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     config.fovDeg      = 90.0f;
     config.zNear       = 0.1f;
     config.zFar        = 1000.0f;
-    // Base path to src folder (OBJ, textures, shaders). Adjust or derive from argv[0] if needed.
+    // Base path to src folder (OBJ, textures, shaders).
     config.basePath    = "C:/Dev/git/PROJECT_NGINE/PROJECT_NGINE/src";
     config.resolvePaths();
 

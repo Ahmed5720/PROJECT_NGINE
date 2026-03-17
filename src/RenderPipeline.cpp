@@ -53,8 +53,8 @@ void RenderPipeline::render(Scene& scene,
     setMat4(*phongShader_, "view", view);
     setMat4(*phongShader_, "projection", projection);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, scene.textureId);
+    // glActiveTexture(GL_TEXTURE0);
+    // glBindTexture(GL_TEXTURE_2D, scene.textureId);
     phongShader_->setFloat3("uLightDirection",
         scene.lightDirection[0], scene.lightDirection[1], scene.lightDirection[2]);
     phongShader_->setFloat3("lightColor",
@@ -64,8 +64,11 @@ void RenderPipeline::render(Scene& scene,
     phongShader_->setFloat("specularStrength", scene.specularStrength);
     phongShader_->setFloat("ambientStrength", scene.ambientStrength);
     phongShader_->setInt("uTex0", 0);
-
-    scene.mesh.draw();
+    
+    for (MeshGPU& mesh: scene.meshes)
+    {
+        mesh.draw();
+    }
 
     if (!scene.gaussians.empty()) {
         std::vector<int> sortedIndices = compute_sorted_indices(scene.gaussians, view);
@@ -92,11 +95,11 @@ void RenderPipeline::render(Scene& scene,
     }
     glDepthFunc(GL_LESS);
 
-    renderImGui(scene, PI);
+    renderImGui(scene, PI, simulator);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void RenderPipeline::renderImGui(Scene& scene, float pi) {
+void RenderPipeline::renderImGui(Scene& scene, float pi, SPHSimulator& simulator) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -155,7 +158,7 @@ void RenderPipeline::renderImGui(Scene& scene, float pi) {
             static bool isPaused = false;
             if (ImGui::Button(isPaused ? "Resume" : "Pause")) isPaused = !isPaused;
             ImGui::SameLine();
-            if (ImGui::Button("Reset Simulation")) { /* TODO */ }
+            //if (ImGui::Button("Reset Simulation")) { simulator.reset_sim(); }
             ImGui::Separator();
             ImGui::Text("Performance");
             ImGui::Text("Particles: %d", PARTICLE_COUNT);
@@ -210,7 +213,6 @@ void RenderPipeline::renderImGui(Scene& scene, float pi) {
             ImGui::BulletText("Check 'Show Demo Window' for more ImGui examples");
         }
         ImGui::Separator();
-        ImGui::Checkbox("Show Demo Window", &scene.showDemoWindow);
         ImGui::End();
     }
     ImGui::Render();

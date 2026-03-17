@@ -17,6 +17,7 @@
 #include <iostream>
 #include <vector>
 
+#include "OBJ_Loader.h"
 namespace {
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     void* user = glfwGetWindowUserPointer(window);
@@ -44,6 +45,17 @@ GLuint loadTexture2D(const std::string& path) {
     stbi_image_free(data);
     return tex;
 }
+
+std::string ResolveTexturePath(const std::string& objPath, const std::string& texturePath) {
+    // Get directory of OBJ file
+    size_t lastSlash = objPath.find_last_of("/\\");
+    std::string baseDir = (lastSlash != std::string::npos) ? objPath.substr(0, lastSlash + 1) : "";
+    
+    // Combine paths
+    return baseDir + texturePath;
+}
+
+
 }  // namespace
 
 Application::Application(const Config& config, const AppArgs& args)
@@ -118,27 +130,55 @@ bool Application::init() {
 
     phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
 
-    std::vector<Vertex> verts;
-    std::vector<uint32_t> indices;
-    bool ok = LoadOBJ_Indexed(config_.objPath, verts, indices);
-    std::cout << "OBJ ok=" << ok << " verts=" << verts.size() << " indices=" << indices.size() << "\n";
-    scene_.mesh.upload(verts, indices);
+    // std::vector<Vertex> verts;
+    // std::vector<uint32_t> indices;
+    // bool ok = LoadOBJ_Indexed(config_.objPath, verts, indices);
+    // std::cout << "OBJ ok=" << ok << " verts=" << verts.size() << " indices=" << indices.size() << "\n";
 
-    scene_.textureId = loadTexture2D(config_.texturePath);
-    if (!scene_.textureId) {
-        std::cerr << "Failed to load texture: " << config_.texturePath << "\n";
-        scene_.destroy();
-        delete phongShader_;
-        phongShader_ = nullptr;
-        ImGui_ImplOpenGL3_Shutdown();
-        ImGui_ImplGlfw_Shutdown();
-        ImGui::DestroyContext();
-        glfwDestroyWindow(window_);
-        window_ = nullptr;
-        glfwTerminate();
-        return false;
+    //uses new obj-loader which supports multiple meshes
+    objl::Loader OBJLoader;
+    bool ok = OBJLoader.LoadFile(config_.objPath);
+    if (ok)
+    {   
+        for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes)
+        {   
+            std::vector<Vertex> Vertices;
+            for (const objl::Vertex vert : mesh.Vertices)
+            {
+               Vertices.push_back({
+            vert.Position.X,
+            vert.Position.Y,
+            vert.Position.Z,
+            vert.Normal.X,
+            vert.Normal.Y,
+            vert.Normal.Z,
+            vert.TextureCoordinate.X,
+            1.0f - vert.TextureCoordinate.Y
+                }); 
+            }
+            MeshGPU currMesh;
+            currMesh.upload(Vertices, mesh.Indices);
+            
+
+            // load textures
+            std::string texturePath = config_.texturePath + "/" +  mesh.MeshMaterial.map_Kd;
+        
+            currMesh.textureId = loadTexture2D(texturePath);
+            currMesh.texturePath = texturePath;
+
+            scene_.meshes.push_back(currMesh);
+
+            std::cout << "Loaded mesh: " << mesh.MeshName 
+                  << " | vertices: " << mesh.Vertices.size()
+                  << " | indices: " << mesh.Indices.size()
+                  << " | material: " << mesh.MeshMaterial.name
+                  << " | texture: " << (currMesh.textureId ? "yes" : "no")
+                  << std::endl;
+        }
     }
 
+
+   
     if (!args_.plyPath.empty()) {
         scene_.gaussians = load_ply(args_.plyPath);
         if (scene_.gaussians.empty())
