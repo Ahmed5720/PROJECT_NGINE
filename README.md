@@ -40,6 +40,9 @@ spatialOffsets Buffer: [0,3,5,9]
 
 ### 1.1 High-Level Structure
 
+For a Diagram of the Architecture:
+https://link.excalidraw.com/l/4sFYiHS90EW/AyscVUlVxQg
+
 The engine is structured as:
 
 - **Application** – Owns the GLFW window, config, and scene; runs the main loop (`init` → `run`); owns the SPH simulator, Phong shader, particle renderer, Gaussian renderer, and the render pipeline. Single entry point from `main()`.
