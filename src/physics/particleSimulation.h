@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 #include "shader.h"
+#include <numeric>
 // ============================================================================
 // CONSTANTS AND CONFIGURATION (inline for single definition when header included in multiple TUs)
 // ============================================================================
@@ -99,10 +100,7 @@ inline vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize)
         std::ceil(extent.z / cellSize)
     );
 }
-
-// ============================================================================
 // SPH SIMULATOR CLASS
-// ============================================================================
 inline void checkComputeError(const char* stage) {
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {

@@ -8,53 +8,22 @@
 #include "ParticleRenderer.h"
 #include "3DGS_renderer.h"
 #include "shader.h"
+#include "TextureLoader.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
-#include "stb_image.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
-#include <vector>
-
+#include <vector> 
 #include "OBJ_Loader.h"
+
 namespace {
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     void* user = glfwGetWindowUserPointer(window);
     if (user)
         static_cast<Application*>(user)->framebufferSizeCallback(width, height);
 }
-
-GLuint loadTexture2D(const std::string& path) {
-    int width, height, channels;
-    unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
-    if (!data) {
-        std::cerr << "STB failed to load: " << path << " - " << stbi_failure_reason() << "\n";
-        return 0;
-    }
-    GLenum format = (channels == 1) ? GL_RED : (channels == 3) ? GL_RGB : GL_RGBA;
-    if (channels != 1 && channels != 3 && channels != 4) {
-        stbi_image_free(data);
-        return 0;
-    }
-    GLuint tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glGenerateMipmap(GL_TEXTURE_2D);
-    stbi_image_free(data);
-    return tex;
-}
-
-std::string ResolveTexturePath(const std::string& objPath, const std::string& texturePath) {
-    // Get directory of OBJ file
-    size_t lastSlash = objPath.find_last_of("/\\");
-    std::string baseDir = (lastSlash != std::string::npos) ? objPath.substr(0, lastSlash + 1) : "";
-    
-    // Combine paths
-    return baseDir + texturePath;
-}
-
 
 }  // namespace
 
@@ -130,59 +99,65 @@ bool Application::init() {
 
     phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
 
-    // std::vector<Vertex> verts;
-    // std::vector<uint32_t> indices;
-    // bool ok = LoadOBJ_Indexed(config_.objPath, verts, indices);
-    // std::cout << "OBJ ok=" << ok << " verts=" << verts.size() << " indices=" << indices.size() << "\n";
-
-    //uses new obj-loader which supports multiple meshes
+    // Load OBJ: each OBJ sub-mesh becomes one SceneNode with its own
+    // Material.  The MeshGPU (GPU buffers) lives in scene_.meshes and
+    // is referenced by index from the node.
     objl::Loader OBJLoader;
     bool ok = OBJLoader.LoadFile(config_.objPath);
-    if (ok)
-    {   
-        for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes)
-        {   
-            std::vector<Vertex> Vertices;
-            for (const objl::Vertex vert : mesh.Vertices)
-            {
-               Vertices.push_back({
-            vert.Position.X,
-            vert.Position.Y,
-            vert.Position.Z,
-            vert.Normal.X,
-            vert.Normal.Y,
-            vert.Normal.Z,
-            vert.TextureCoordinate.X,
-            1.0f - vert.TextureCoordinate.Y
-                }); 
+    if (ok) {
+        for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes) {
+            // --- Build vertex buffer ---
+            std::vector<Vertex> vertices;
+            vertices.reserve(mesh.Vertices.size());
+            for (const objl::Vertex& v : mesh.Vertices) {
+                vertices.push_back({
+                    v.Position.X,  v.Position.Y,  v.Position.Z,
+                    v.Normal.X,    v.Normal.Y,    v.Normal.Z,
+                    v.TextureCoordinate.X,
+                    1.0f - v.TextureCoordinate.Y   // flip V (OBJ origin is bottom-left)
+                });
             }
-            MeshGPU currMesh;
-            currMesh.upload(Vertices, mesh.Indices);
-            
-
-            // load textures
-            std::string texturePath = config_.texturePath + "/" +  mesh.MeshMaterial.map_Kd;
-        
-            currMesh.textureId = loadTexture2D(texturePath);
-            currMesh.texturePath = texturePath;
-
-            scene_.meshes.push_back(currMesh);
-
-            std::cout << "Loaded mesh: " << mesh.MeshName 
-                  << " | vertices: " << mesh.Vertices.size()
-                  << " | indices: " << mesh.Indices.size()
-                  << " | material: " << mesh.MeshMaterial.name
-                  << " | texture: " << (currMesh.textureId ? "yes" : "no")
-                  << std::endl;
+ 
+            // Upload to GPU 
+            MeshGPU gpuMesh;
+            gpuMesh.upload(vertices, mesh.Indices);
+            int meshIndex = static_cast<int>(scene_.meshes.size());
+            scene_.meshes.push_back(std::move(gpuMesh));
+ 
+            // Build Material from the MTL entry 
+            Material mat;
+            mat.name = mesh.MeshMaterial.name;
+            mat.type = Material::Type::Phong;
+ 
+            // Diffuse colour from MTL Kd (default white if not set)
+            mat.diffuseColor[0] = mesh.MeshMaterial.Kd.X;
+            mat.diffuseColor[1] = mesh.MeshMaterial.Kd.Y;
+            mat.diffuseColor[2] = mesh.MeshMaterial.Kd.Z;
+ 
+            // Specular / shininess from MTL Ns and Ks magnitude
+            mat.shininess = (mesh.MeshMaterial.Ns > 0.0f) ? mesh.MeshMaterial.Ns : 32.0f;
+            //float ksAvg = (mesh.MeshMaterial.Ks.X + mesh.MeshMaterial.Ks.Y + mesh.MeshMaterial.Ks.Z) / 3.0f;
+            //mat.specularStrength = (ksAvg > 0.0f) ? ksAvg : 0.5f;
+ 
+            // Diffuse texture (map_Kd)
+            if (!mesh.MeshMaterial.map_Kd.empty()) {
+                std::string texPath = config_.texturePath + "/" + mesh.MeshMaterial.map_Kd;
+                mat.diffuseMap = TextureLoader::load(texPath);
+            }
+ 
+            // Create SceneNode 
+            SceneNode& node = scene_.addNode(mesh.MeshName, meshIndex, std::move(mat));
+ 
+            std::cout << "[Application] Loaded mesh '" << node.name << "'"
+                      << "  verts="   << mesh.Vertices.size()
+                      << "  indices=" << mesh.Indices.size()
+                      << "  material='" << node.material.name << "'"
+                      << "  texture=" << (node.material.diffuseMap.valid() ? "yes" : "no")
+                      << "\n";
         }
     }
-
-
-   
-    if (!args_.plyPath.empty()) {
-        scene_.gaussians = load_ply(args_.plyPath);
-        if (scene_.gaussians.empty())
-            std::cerr << "No Gaussians loaded from " << args_.plyPath << "; 3DGS disabled.\n";
+    else {
+    std::cerr << "[Application] Failed to load OBJ: " << config_.objPath << "\n";
     }
 
     scene_.camera.fovDeg = config_.fovDeg;
@@ -190,9 +165,7 @@ bool Application::init() {
     simulator_ = new SPHSimulator();
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
-    gaussianRenderer_ = new GaussianRenderer();
-    gaussianRenderer_->init(config_.gaussianVsPath, config_.gaussianFsPath);
-    pipeline_ = new RenderPipeline(phongShader_, gaussianRenderer_, particleRenderer_);
+    pipeline_ = new RenderPipeline(phongShader_, particleRenderer_);
 
     glfwSwapInterval(1);
     initialized_ = true;

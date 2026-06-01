@@ -167,6 +167,15 @@ inline mat4x4 matrix_makeRotationZ(float angleRad) {
     mat.m[2][2] = mat.m[3][3] = 1.0f;
     return mat;
 }
+inline mat4x4 matrix_makeScale(float x, float y, float z)
+{
+    mat4x4 mat;
+    mat.m[0][0] = x;
+    mat.m[1][1] = y;
+    mat.m[2][2] = z;
+    mat.m[3][3] = 1;
+    return mat;
+}
 inline mat4x4 matrix_makeProjection(float fovDeg, float aspect, float ZNear, float ZFar) {
     float f = 1.0f / tanf(fovDeg * 0.5f * 3.1415f / 180.0f);
     mat4x4 m;
