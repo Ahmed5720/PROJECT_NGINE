@@ -1,3 +1,4 @@
+#pragma once
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "miniVM.h"
@@ -8,25 +9,25 @@
 #include <fstream>
 #include <sstream>
 #include "shader.h"
+#include <numeric>
 // ============================================================================
-// CONSTANTS AND CONFIGURATION
+// CONSTANTS AND CONFIGURATION (inline for single definition when header included in multiple TUs)
 // ============================================================================
 
- const int PARTICLE_COUNT = 1000;
- float SMOOTHING_RADIUS = 0.5f;
- float PARTICLE_MASS = 1.0f;
- float REST_DENSITY = 1000.0f;
- float PRESSURE_CONSTANT = 200.0f;
- float VISCOSITY_CONSTANT = 0.01f;
- float GRAVITY = -9.8f;
- float BOUNCE_DAMPING = 0.5f;
- float TIME_STEP = 0.01f;
- float M_PI = 3.14;
- vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
- vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
-
-// Hash grid parameters
-const int HASH_TABLE_SIZE = 16384;  // Should be prime or power of 2
+inline const int PARTICLE_COUNT = 1000;
+inline float SMOOTHING_RADIUS = 0.5f;
+inline float PARTICLE_MASS = 1.0f;
+inline float REST_DENSITY = 1000.0f;
+inline float PRESSURE_CONSTANT = 0.0f;
+inline float VISCOSITY_CONSTANT = 0.0f;
+inline float GRAVITY = 0.0f;
+inline float BOUNCE_DAMPING = 0.5f;
+inline float TIME_STEP = 0.01f;
+inline float M_PI = 3.14f;
+inline vec3f BOX_MIN(-1.0f, -1.0f, -1.0f);
+inline vec3f BOX_MAX(1.0f, 1.0f, 1.0f);
+inline constexpr float SPH_PI = 3.14159265358979f;
+inline const int HASH_TABLE_SIZE = 16384;
 
 // ============================================================================
 // DATA STRUCTURES
@@ -82,15 +83,15 @@ struct SimParams {
 // ============================================================================
 
 
-float poly6Constant(float h) {
-    return 315.0f / (64.0f * M_PI * std::pow(h, 9));
+inline float poly6Constant(float h) {
+    return 315.0f / (64.0f * SPH_PI * std::pow(h, 9));
 }
 
-float spikyConstant(float h) {
-    return -45.0f / (M_PI * std::pow(h, 6));
+inline float spikyConstant(float h) {
+    return -45.0f / (SPH_PI * std::pow(h, 6));
 }
 
-vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
+inline vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
     vec3f extent = vector_sub(boxMax, boxMin);
     //cout << "grid dim is" << std::ceil(extent.x / cellSize) << std::ceil(extent.y / cellSize) << std::ceil(extent.z / cellSize);
     return vec3i(
@@ -99,11 +100,8 @@ vec3i calculateGridDimensions(vec3f boxMin, vec3f boxMax, float cellSize) {
         std::ceil(extent.z / cellSize)
     );
 }
-
-// ============================================================================
 // SPH SIMULATOR CLASS
-// ============================================================================
-void checkComputeError(const char* stage) {
+inline void checkComputeError(const char* stage) {
     GLenum err = glGetError();
     if (err != GL_NO_ERROR) {
         std::cerr << "OpenGL error in " << stage << ": " << err << std::endl;
@@ -133,6 +131,43 @@ public:
         glDeleteProgram(integrateProgram);
     }
 
+    void reset_sim()
+    {
+        // Re-initialize particles
+        initializeParticles();
+        
+        // Clear SPH data
+        std::vector<SPHData> emptySPHData(PARTICLE_COUNT);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, sphDataBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
+                       PARTICLE_COUNT * sizeof(SPHData), emptySPHData.data());
+        
+        // Clear hash and index buffers
+        std::vector<uint32_t> zeros(PARTICLE_COUNT, 0);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, hashBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
+                       PARTICLE_COUNT * sizeof(uint32_t), zeros.data());
+        
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
+                       PARTICLE_COUNT * sizeof(uint32_t), zeros.data());
+        
+        // Clear cell start/end buffers
+        std::vector<uint32_t> maxVals(HASH_TABLE_SIZE, PARTICLE_COUNT);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellStartBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
+                       HASH_TABLE_SIZE * sizeof(uint32_t), maxVals.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellEndBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
+                       HASH_TABLE_SIZE * sizeof(uint32_t), maxVals.data());
+        
+        // Reset CPU-side arrays
+        hashData.assign(PARTICLE_COUNT, 0);
+        indexData.assign(PARTICLE_COUNT, 0);
+        
+        std::cout << "Simulation reset!" << std::endl;
+    }
+
     GLuint getParticleBuffer() const { return particleBuffer; }
     
     void step() {
@@ -159,7 +194,16 @@ public:
         glBindBuffer(GL_UNIFORM_BUFFER, paramsUBO);
         glBufferData(GL_UNIFORM_BUFFER, sizeof(SimParams), &params, GL_STATIC_DRAW);
 
-        //Stage 1: Compute spatial hash for each particle
+
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, sphDataBuffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, hashBuffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, indexBuffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, cellStartBuffer);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, cellEndBuffer);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, paramsUBO);
+
+       // Stage 1: Compute spatial hash for each particle
         glUseProgram(computeHashProgram);
         glDispatchCompute((PARTICLE_COUNT + 63) / 64, 1, 1);
         checkComputeError("COMPUTE_HASH");
@@ -227,6 +271,7 @@ private:
                      PARTICLE_COUNT * sizeof(Particle), 
                      nullptr, GL_DYNAMIC_DRAW);
         
+        
         // SPH data buffer
         glGenBuffers(1, &sphDataBuffer);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, sphDataBuffer);
@@ -234,42 +279,40 @@ private:
                      PARTICLE_COUNT * sizeof(SPHData), 
                      nullptr, GL_DYNAMIC_DRAW);
         
-        // Hash buffer
         glGenBuffers(1, &hashBuffer);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, hashBuffer);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 
-                     PARTICLE_COUNT * sizeof(uint32_t), 
-                     nullptr, GL_DYNAMIC_DRAW);
+        std::vector<uint32_t> zeroHashes(PARTICLE_COUNT, 0u);
+        glBufferData(GL_SHADER_STORAGE_BUFFER,
+                    PARTICLE_COUNT * sizeof(uint32_t),
+                    zeroHashes.data(), GL_DYNAMIC_DRAW);
         
         // Index buffer
+        std::vector<uint32_t> identityIndices(PARTICLE_COUNT);
+        std::iota(identityIndices.begin(), identityIndices.end(), 0u);
         glGenBuffers(1, &indexBuffer);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexBuffer);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 
-                     PARTICLE_COUNT * sizeof(uint32_t), 
-                     nullptr, GL_DYNAMIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER,
+                    PARTICLE_COUNT * sizeof(uint32_t),
+                    identityIndices.data(), GL_DYNAMIC_DRAW);
         
-        // Cell start buffer
+        std::vector<uint32_t> sentinel(HASH_TABLE_SIZE, PARTICLE_COUNT);
+    
         glGenBuffers(1, &cellStartBuffer);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellStartBuffer);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 
-                     HASH_TABLE_SIZE * sizeof(uint32_t), 
-                     nullptr, GL_DYNAMIC_DRAW);
-        
-        // Cell end buffer
+        glBufferData(GL_SHADER_STORAGE_BUFFER,
+                    HASH_TABLE_SIZE * sizeof(uint32_t),
+                    sentinel.data(), GL_DYNAMIC_DRAW);
+
         glGenBuffers(1, &cellEndBuffer);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellEndBuffer);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, 
-                     HASH_TABLE_SIZE * sizeof(uint32_t), 
-                     nullptr, GL_DYNAMIC_DRAW);
-        
-        // Initialize cell start/end to 0
-        std::vector<uint32_t> zeros(HASH_TABLE_SIZE, 0);
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellStartBuffer);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
-                       HASH_TABLE_SIZE * sizeof(uint32_t), zeros.data());
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, cellEndBuffer);
-        glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, 
-                       HASH_TABLE_SIZE * sizeof(uint32_t), zeros.data());
+        glBufferData(GL_SHADER_STORAGE_BUFFER,
+                    HASH_TABLE_SIZE * sizeof(uint32_t),
+                    sentinel.data(), GL_DYNAMIC_DRAW);
+
+        // CPU-side mirror arrays — also init to identity
+        hashData.resize(PARTICLE_COUNT, 0u);
+        indexData.resize(PARTICLE_COUNT);
+        std::iota(indexData.begin(), indexData.end(), 0u);
         
         // Simulation parameters UBO
         SimParams params;
@@ -341,25 +384,59 @@ private:
         bindBuffers(computeForcesProgram);
         bindBuffers(integrateProgram);
     }
-    
+    void drawDebugBox() {
+        // Define the 8 corners of your box
+        vec3f corners[8] = {
+            vec3f(BOX_MIN.x, BOX_MIN.y, BOX_MIN.z),  // 0: near bottom left
+            vec3f(BOX_MAX.x, BOX_MIN.y, BOX_MIN.z),  // 1: near bottom right
+            vec3f(BOX_MAX.x, BOX_MAX.y, BOX_MIN.z),  // 2: near top right
+            vec3f(BOX_MIN.x, BOX_MAX.y, BOX_MIN.z),  // 3: near top left
+            vec3f(BOX_MIN.x, BOX_MIN.y, BOX_MAX.z),  // 4: far bottom left
+            vec3f(BOX_MAX.x, BOX_MIN.y, BOX_MAX.z),  // 5: far bottom right
+            vec3f(BOX_MAX.x, BOX_MAX.y, BOX_MAX.z),  // 6: far top right
+            vec3f(BOX_MIN.x, BOX_MAX.y, BOX_MAX.z)   // 7: far top left
+        };
+        
+        // Define the 12 edges (pairs of corner indices)
+        int edges[12][2] = {
+            {0,1}, {1,2}, {2,3}, {3,0},  // near face
+            {4,5}, {5,6}, {6,7}, {7,4},  // far face
+            {0,4}, {1,5}, {2,6}, {3,7}   // connecting edges
+        };
+        
+        // Draw using old-style GL (if you're using legacy OpenGL)
+        glColor3f(1.0f, 0.0f, 0.0f);  // Red box
+        glBegin(GL_LINES);
+        for (int i = 0; i < 12; i++) {
+            glVertex3f(corners[edges[i][0]].x, corners[edges[i][0]].y, corners[edges[i][0]].z);
+            glVertex3f(corners[edges[i][1]].x, corners[edges[i][1]].y, corners[edges[i][1]].z);
+        }
+        glEnd();
+    }
     void initializeParticles() {
         std::vector<Particle> particles(PARTICLE_COUNT);
         
         // Initialize particles in a dam break configuration
         int particlesPerDim = std::cbrt(PARTICLE_COUNT);
-        float spacing = SMOOTHING_RADIUS * 0.8f;
-        
+        //float spacing = SMOOTHING_RADIUS * 0.3f;
+        float spacing = 0.01f; 
+        //drawDebugBox();
+        vec3f spawnMin(-0.3f, 0.2f, -0.3f);   // elevated, centered
+        vec3f spawnMax( 0.3f, 0.8f,  0.3f);     
+        float spacing_x = (spawnMax.x - spawnMin.x) / (float)(particlesPerDim);
+        float spacing_y = (spawnMax.y - spawnMin.y) / (float)(particlesPerDim);
+        float spacing_z = (spawnMax.z - spawnMin.z) / (float)(particlesPerDim);
         int idx = 0;
         for (int x = 0; x < particlesPerDim && idx < PARTICLE_COUNT; x++) {
             for (int y = 0; y < particlesPerDim && idx < PARTICLE_COUNT; y++) {
                 for (int z = 0; z < particlesPerDim && idx < PARTICLE_COUNT; z++) {
-                    particles[idx].position = vec3f(
-                        BOX_MIN.x + 0.1f + x * spacing,
-                        BOX_MIN.y + 0.1f + y * spacing,
-                        BOX_MIN.z + 0.1f + z * spacing
-                    );
-                    particles[idx].velocity = vec3f(0.01f,0.0f,0.0f,0.0f);
-                    particles[idx].color = vec3f(1.0f, 1.0f, 1.0f, 1.0f);
+                    
+
+                    particles[idx].position.x = spawnMin.x + x * spacing_x;
+                    particles[idx].position.y = spawnMin.y + y * spacing_y;
+                    particles[idx].position.z = spawnMin.z + z * spacing_z;
+                    particles[idx].velocity = vec3f(0.0f,0.0f,0.0f,0.0f);
+                    particles[idx].color = vec3f(1.0f, 0.0f, 0.0f, 1.0f);
                     particles[idx].life = 1.0f;
                     particles[idx]._padLife[0] = particles[idx]._padLife[1] = particles[idx]._padLife[2] = 0.0f;
                     idx++;

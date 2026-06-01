@@ -89,7 +89,7 @@ layout(std430, binding = 5) buffer CellEndBuffer {
     uint cellEnd[];
 };
 
-layout(std140, binding = 0) uniform SimParamsUBO {
+layout(std430, binding = 0) uniform SimParamsUBO {
     SimParams params;
 };
 
@@ -219,10 +219,10 @@ void main() {
             for (int dz = -1; dz <= 1; dz++) {
                 ivec3 neighborCell = cellA + ivec3(dx, dy, dz);
                 
-                // if (any(lessThan(neighborCell, ivec3(0))) || 
-                //     any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
-                //     continue;
-                // }
+                if (any(lessThan(neighborCell, ivec3(0))) || 
+                    any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
+                    continue;
+                }
                 
                 uint hash = hashCell(neighborCell);
                 uint start = cellStart[hash];
@@ -276,10 +276,10 @@ void main() {
             for (int dz = -1; dz <= 1; dz++) {
                 ivec3 neighborCell = cellA + ivec3(dx, dy, dz);
                 
-                // if (any(lessThan(neighborCell, ivec3(0))) || 
-                //     any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
-                //     continue;
-                // }
+                if (any(lessThan(neighborCell, ivec3(0))) || 
+                    any(greaterThanEqual(neighborCell, ivec3(params.gridDim)))) {
+                    continue;
+                }
                 //force+= vec3(10, 10,10);
                 uint hash = hashCell(neighborCell);
                 uint start = cellStart[hash];
@@ -304,7 +304,9 @@ void main() {
                         vec3 rNorm = diff / r;
                         
                         // Pressure force
-                        float pressureTerm = (pressureA + pressureB) / (2.0 * densityB);
+                       // float pressureTerm = (pressureA + pressureB) / (2.0 * densityB);
+                        float pressureTerm = (pressureA / (densityA * densityA)) + 
+                                    (pressureB / (densityB * densityB));
                         vec3 pressureForce = -params.mass * pressureTerm  *  spikyGradient(r, rNorm);
                         
                         // Viscosity force
@@ -343,12 +345,12 @@ void main() {
     }
     
     // Apply gravity and SPH forces
-    vec3 acceleration =  force / density;
+    //vec3 acceleration = force / density;
     vec3 gravity = vec3(0.0, params.gravity, 0.0);
-    vel += params.dt * (acceleration + gravity);
+    vel += params.dt * gravity; // (acceleration + gravity);
     pos += params.dt * vel;
     
-    // Boundary collisions
+    //Boundary collisions
     if (pos.x < params.boxMin.x) {
         pos.x = params.boxMin.x;
         vel.x = abs(vel.x) * params.bounce;

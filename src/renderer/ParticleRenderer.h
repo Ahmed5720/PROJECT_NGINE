@@ -1,6 +1,7 @@
 #pragma once
 #include <glad/glad.h>
 #include <vector>
+#include <string>
 #include "shader.h"
 #include "geometry.h"
 
@@ -10,6 +11,7 @@ public:
     ~ParticleRenderer();
     
     void init();
+    void init(const std::string& vertexPath, const std::string& fragmentPath);
     void render(GLuint particleBuffer, int particleCount, const mat4x4& view, const mat4x4& projection);
     
 private:
@@ -19,32 +21,27 @@ private:
 };
 
 
-ParticleRenderer::ParticleRenderer() : particleShader(nullptr), VAO(0), VBO(0) {
+inline ParticleRenderer::ParticleRenderer() : particleShader(nullptr), VAO(0), VBO(0) {
 }
 
-ParticleRenderer::~ParticleRenderer() {
+inline ParticleRenderer::~ParticleRenderer() {
     if (VAO) glDeleteVertexArrays(1, &VAO);
     if (VBO) glDeleteBuffers(1, &VBO);
     delete particleShader;
 }
 
-void ParticleRenderer::init() {
-    // Create and compile particle shader
-    particleShader = new shader(
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\particle.vs",
-        "C:\\Dev\\git\\PROJECT_NGINE\\PROJECT_NGINE\\src\\shaders\\particle.fs"
-    );
-    
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-
-    // Needed for gl_PointSize from shader in core profile
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    // glEnable(GL_POINT_SMOOTH);
-    // glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+inline void ParticleRenderer::init() {
+    init("shaders/particle.vs", "shaders/particle.fs");
 }
 
-void ParticleRenderer::render(GLuint particleBuffer, int particleCount, 
+inline void ParticleRenderer::init(const std::string& vertexPath, const std::string& fragmentPath) {
+    particleShader = new shader(vertexPath.c_str(), fragmentPath.c_str());
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+    glEnable(GL_PROGRAM_POINT_SIZE);
+}
+
+inline void ParticleRenderer::render(GLuint particleBuffer, int particleCount, 
                               const mat4x4& view, const mat4x4& projection) {
     if (!particleShader || particleCount <= 0)
         return;
