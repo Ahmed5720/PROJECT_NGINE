@@ -141,8 +141,13 @@ bool Application::init() {
  
             // Diffuse texture (map_Kd)
             if (!mesh.MeshMaterial.map_Kd.empty()) {
-                std::string texPath = config_.texturePath + "/" + mesh.MeshMaterial.map_Kd;
+                // Prefer textures beside the OBJ; fall back to src/textures/
+                std::string texPath = TextureLoader::resolveRelative(config_.objPath, mesh.MeshMaterial.map_Kd);
                 mat.diffuseMap = TextureLoader::load(texPath);
+                if (!mat.diffuseMap.valid()) {
+                    texPath = config_.texturePath + "/" + mesh.MeshMaterial.map_Kd;
+                    mat.diffuseMap = TextureLoader::load(texPath);
+                }
             }
  
             // Create SceneNode 

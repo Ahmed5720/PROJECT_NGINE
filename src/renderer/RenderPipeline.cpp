@@ -87,37 +87,24 @@ void RenderPipeline::uploadLighting(shader& s, const LightEnvironment& lights) {
         ++activePoints;
     }
     s.setInt("numPointLights", activePoints);
-    // spot lights
+    // Spot light — shader uses a single `spotLight` uniform (first enabled only)
     int activeSpots = 0;
-    for (int i = 0; i < lights.numSpotLights; ++i) {
+    for (int i = 0; i < lights.numSpotLights && activeSpots < 1; ++i) {
         const SpotLight& sl = lights.spotLights[i];
         if (!sl.enabled) continue;
 
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "position");
-        s.setFloat3(buf, sl.position[0],  sl.position[1],  sl.position[2]);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "direction");
-        s.setFloat3(buf, sl.direction[0], sl.direction[1], sl.direction[2]);
+        s.setFloat3("spotLight.position",  sl.position[0],  sl.position[1],  sl.position[2]);
+        s.setFloat3("spotLight.direction", sl.direction[0], sl.direction[1], sl.direction[2]);
+        s.setFloat("spotLight.cutOff",      sl.cutOff);
+        s.setFloat("spotLight.outerCutOff", sl.outerCutOff);
+        s.setFloat("spotLight.constant",   sl.constant);
+        s.setFloat("spotLight.linear",     sl.linear);
+        s.setFloat("spotLight.quadratic",  sl.quadratic);
+        s.setFloat3("spotLight.ambient",  sl.ambient[0],  sl.ambient[1],  sl.ambient[2]);
+        s.setFloat3("spotLight.diffuse",  sl.diffuse[0],  sl.diffuse[1],  sl.diffuse[2]);
+        s.setFloat3("spotLight.specular", sl.specular[0], sl.specular[1], sl.specular[2]);
 
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "cutOff");
-        s.setFloat(buf, sl.cutOff);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "outerCutOff");
-        s.setFloat(buf, sl.outerCutOff);
-
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "constant");
-        s.setFloat(buf, sl.constant);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "linear");
-        s.setFloat(buf, sl.linear);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "quadratic");
-        s.setFloat(buf, sl.quadratic);
-
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "ambient");
-        s.setFloat3(buf, sl.ambient[0],  sl.ambient[1],  sl.ambient[2]);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "diffuse");
-        s.setFloat3(buf, sl.diffuse[0],  sl.diffuse[1],  sl.diffuse[2]);
-        fmtUniform(buf, sizeof(buf), "spotLights", activeSpots, "specular");
-        s.setFloat3(buf, sl.specular[0], sl.specular[1], sl.specular[2]);
-
-        ++activeSpots;
+        activeSpots = 1;
     }
     s.setInt("numSpotLights", activeSpots);
 }
@@ -161,9 +148,7 @@ void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat
         // Diffuse map
         glActiveTexture(GL_TEXTURE0);
         if (node.material.diffuseMap.valid())
-        {    std::cout << "found valid\n";
             glBindTexture(GL_TEXTURE_2D, node.material.diffuseMap.id);
-        }
         else
         {
             //std::cout << "invalid material, using white texture instead\n";
