@@ -52,8 +52,6 @@ The engine is structured as:
 - **RenderPipeline** – Given scene and simulator, performs a fixed draw order: clear → Phong mesh → (optional) Gaussian splats → particles → ImGui. It also runs the ImGui control panels and syncs them with the scene.
 
 
-
-
 ### 1.2 Rendering Pipeline Order
 
 Fixed sequence each frame:
