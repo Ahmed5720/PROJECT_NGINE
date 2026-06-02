@@ -35,18 +35,86 @@ void checkGLError(const char* ctx) {
 RenderPipeline::RenderPipeline(shader* phongShader, ParticleRenderer* particleRenderer)
     : phongShader_(phongShader), particleRenderer_(particleRenderer) {}
 
-void RenderPipeline::render(Scene& scene, SPHSimulator& simulator, int viewportW, int viewportH, float zNear,  float zFar) {
-    glClearColor(scene.backgroundColor[0], scene.backgroundColor[1], scene.backgroundColor[2], 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+RenderPipeline::~RenderPipeline() {
+    destroySceneFramebuffer();
+}
 
-    float  aspect     = static_cast<float>(viewportW) / static_cast<float>(viewportH);
-    mat4x4 view       = scene.camera.getViewMatrix();
-    mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
+void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
+    if (w < 8 || h < 8)
+        return;
+    if (w == sceneFbW_ && h == sceneFbH_)
+        return;
 
-    renderPhongPass(scene, view, projection);
-    //renderImGui(scene, PI, simulator);
-    renderImGui(scene, PI); 
+    destroySceneFramebuffer();
+    sceneFbW_ = w;
+    sceneFbH_ = h;
 
+    glGenFramebuffers(1, &sceneFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
+
+    glGenTextures(1, &sceneColorTex_);
+    glBindTexture(GL_TEXTURE_2D, sceneColorTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneColorTex_, 0);
+
+    glGenRenderbuffers(1, &sceneDepthRbo_);
+    glBindRenderbuffer(GL_RENDERBUFFER, sceneDepthRbo_);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRbo_);
+
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        std::cerr << "[RenderPipeline] Scene framebuffer incomplete: 0x" << std::hex << status << std::dec << "\n";
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void RenderPipeline::destroySceneFramebuffer() {
+    if (sceneDepthRbo_) {
+        glDeleteRenderbuffers(1, &sceneDepthRbo_);
+        sceneDepthRbo_ = 0;
+    }
+    if (sceneColorTex_) {
+        glDeleteTextures(1, &sceneColorTex_);
+        sceneColorTex_ = 0;
+    }
+    if (sceneFbo_) {
+        glDeleteFramebuffers(1, &sceneFbo_);
+        sceneFbo_ = 0;
+    }
+    sceneFbW_ = 0;
+    sceneFbH_ = 0;
+}
+
+void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
+                            float zNear, float zFar) {
+    const EditorUI::Layout layout = editorUI_.computeLayout(framebufferW, framebufferH);
+
+    if (layout.sceneW >= 8 && layout.sceneH >= 8) {
+        resizeSceneFramebuffer(layout.sceneW, layout.sceneH);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
+        glViewport(0, 0, layout.sceneW, layout.sceneH);
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(scene.backgroundColor[0], scene.backgroundColor[1], scene.backgroundColor[2], 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        const float aspect = static_cast<float>(layout.sceneW) / static_cast<float>(layout.sceneH);
+        const mat4x4 view = scene.camera.getViewMatrix();
+        const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
+        renderPhongPass(scene, view, projection);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    glViewport(0, 0, framebufferW, framebufferH);
+    glClearColor(0.06f, 0.06f, 0.06f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    editorUI_.beginFrame();
+    editorUI_.draw(scene, sceneColorTex_, layout);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
@@ -183,160 +251,4 @@ GLuint RenderPipeline::getWhiteTex() {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     return whiteTex_;
-}
-
-// renderImGui
-void RenderPipeline::renderImGui(Scene& scene, float pi) {
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
-
-    float cameraYawDeg = scene.camera.yaw * (180.0f / pi);
-
-    if (scene.showControlWindow) {
-        ImGui::Begin("Controls", &scene.showControlWindow);
-
-        //  SPH 
-        if (ImGui::CollapsingHeader("SPH Simulation Parameters")) {
-            ImGui::Text("Particle Count: %d", PARTICLE_COUNT);
-            static float smoothingRadius   = SMOOTHING_RADIUS;
-            static float particleMass      = PARTICLE_MASS;
-            static float restDensity       = REST_DENSITY;
-            static float pressureConstant  = PRESSURE_CONSTANT;
-            static float viscosityConstant = VISCOSITY_CONSTANT;
-            static float gravity           = GRAVITY;
-            static float bounceDamping     = BOUNCE_DAMPING;
-            static float timeStep          = TIME_STEP;
-            if (ImGui::DragFloat("Smoothing Radius",   &smoothingRadius,   0.001f, 0.01f,   100.0f, "%.4f")) SMOOTHING_RADIUS   = smoothingRadius;
-            if (ImGui::DragFloat("Particle Mass",      &particleMass,      0.01f,  0.001f,  100.0f, "%.4f")) PARTICLE_MASS      = particleMass;
-            if (ImGui::DragFloat("Rest Density",       &restDensity,       10.0f,  100.0f, 5000.0f, "%.1f")) REST_DENSITY       = restDensity;
-            if (ImGui::DragFloat("Pressure Constant",  &pressureConstant,  1.0f,   0.0f,  1000.0f, "%.1f")) PRESSURE_CONSTANT  = pressureConstant;
-            if (ImGui::DragFloat("Viscosity Constant", &viscosityConstant, 0.001f, 0.0f,    1.0f,  "%.4f")) VISCOSITY_CONSTANT = viscosityConstant;
-            if (ImGui::DragFloat("Gravity",            &gravity,           0.1f,  -20.0f,   0.0f,  "%.2f")) GRAVITY            = gravity;
-            if (ImGui::DragFloat("Bounce Damping",     &bounceDamping,     0.01f,  0.0f,    1.0f,  "%.2f")) BOUNCE_DAMPING     = bounceDamping;
-            if (ImGui::DragFloat("Time Step",          &timeStep,          0.0001f,0.0001f, 0.1f,  "%.4f")) TIME_STEP          = timeStep;
-        }
-
-        // Scene Nodes
-        if (ImGui::CollapsingHeader("Scene Nodes")) {
-            for (int i = 0; i < static_cast<int>(scene.nodes.size()); ++i) {
-                SceneNode& node = scene.nodes[i];
-                std::string label = node.name.empty() ? ("Node " + std::to_string(i)) : node.name;
-                if (ImGui::TreeNode(label.c_str())) {
-                    ImGui::Checkbox("Visible",      &node.visible);
-                    ImGui::Checkbox("Casts Shadow", &node.castsShadow);
-                    ImGui::Checkbox("Recv Shadow",  &node.receivesShadow);
-                    ImGui::Separator();
-                    ImGui::Text("Transform");
-                    ImGui::DragFloat3("Position##n", node.position, 0.01f, -100.0f, 100.0f);
-                    ImGui::DragFloat3("Rotation##n", node.rotation, 1.0f,  -180.0f, 180.0f);
-                    ImGui::DragFloat3("Scale##n",    node.scale,    0.01f,    0.01f, 100.0f);
-                    ImGui::Separator();
-                    ImGui::Text("Material: %s", node.material.name.c_str());
-                    ImGui::DragFloat("Shininess", &node.material.shininess, 1.0f, 1.0f, 256.0f);
-                    ImGui::Text("Diffuse map:  %s", node.material.diffuseMap.valid()  ? "loaded" : "none (white fallback)");
-                    ImGui::Text("Specular map: %s", node.material.specularMap.valid() ? "loaded" : "none (diffuse fallback)");
-                    ImGui::TreePop();
-                }
-            }
-        }
-
-        // Camera
-        if (ImGui::CollapsingHeader("Camera Controls")) {
-            ImGui::DragFloat3("Camera Pos", &scene.camera.position.x, 0.01f, -100.0f, 100.0f);
-            if (ImGui::DragFloat("Yaw (degrees)", &cameraYawDeg, 1.0f, -180.0f, 180.0f))
-                scene.camera.yaw = cameraYawDeg * (pi / 180.0f);
-            if (ImGui::Button("Reset Camera")) {
-                scene.camera.position = {0.0f, 0.0f, 0.0f};
-                scene.camera.yaw = 0.0f;
-            }
-        }
-
-        // Lighting
-        if (ImGui::CollapsingHeader("Lighting")) {
-            ImGui::Text("Directional Light (Sun)");
-            ImGui::DragFloat3("Sun Direction", scene.lights.sun.direction, 0.01f, -1.0f, 1.0f);
-            ImGui::ColorEdit3("Sun Ambient",   scene.lights.sun.ambient);
-            ImGui::ColorEdit3("Sun Diffuse",   scene.lights.sun.diffuse);
-            ImGui::ColorEdit3("Sun Specular",  scene.lights.sun.specular);
-
-            ImGui::Separator();
-            ImGui::Text("Point Lights  (%d / %d active)", scene.lights.numPointLights, MAX_POINT_LIGHTS);
-            for (int i = 0; i < scene.lights.numPointLights; ++i) {
-                PointLight& pl = scene.lights.pointLights[i];
-                std::string tag = "Point Light " + std::to_string(i);
-                if (ImGui::TreeNode(tag.c_str())) {
-                    ImGui::Checkbox("Enabled##pl",      &pl.enabled);
-                    ImGui::DragFloat3("Position##pl",    pl.position, 0.05f, -100.0f, 100.0f);
-                    ImGui::ColorEdit3("Ambient##pl",     pl.ambient);
-                    ImGui::ColorEdit3("Diffuse##pl",     pl.diffuse);
-                    ImGui::ColorEdit3("Specular##pl",    pl.specular);
-                    ImGui::DragFloat("Constant##pl",    &pl.constant,  0.001f, 0.0f, 2.0f,  "%.4f");
-                    ImGui::DragFloat("Linear##pl",      &pl.linear,    0.001f, 0.0f, 1.0f,  "%.4f");
-                    ImGui::DragFloat("Quadratic##pl",   &pl.quadratic, 0.001f, 0.0f, 0.5f,  "%.4f");
-                    ImGui::TreePop();
-                }
-            }
-            if (scene.lights.numPointLights < MAX_POINT_LIGHTS) {
-                if (ImGui::Button("Add Point Light"))
-                    scene.lights.addPointLight(PointLight{});
-            }
-
-            ImGui::Separator();
-            ImGui::Text("Spot Lights  (%d / %d active)", scene.lights.numSpotLights, MAX_SPOT_LIGHTS);
-            for (int i = 0; i < scene.lights.numSpotLights; ++i) {
-                SpotLight& sl = scene.lights.spotLights[i];
-                std::string tag = "Spot Light " + std::to_string(i);
-                if (ImGui::TreeNode(tag.c_str())) {
-                    ImGui::Checkbox("Enabled##sl",      &sl.enabled);
-                    ImGui::DragFloat3("Position##sl",    sl.position,  0.05f, -100.0f, 100.0f);
-                    ImGui::DragFloat3("Direction##sl",   sl.direction, 0.01f,   -1.0f,   1.0f);
-                    ImGui::ColorEdit3("Ambient##sl",     sl.ambient);
-                    ImGui::ColorEdit3("Diffuse##sl",     sl.diffuse);
-                    ImGui::ColorEdit3("Specular##sl",    sl.specular);
-                    ImGui::DragFloat("Constant##sl",    &sl.constant,  0.001f, 0.0f, 2.0f,  "%.4f");
-                    ImGui::DragFloat("Linear##sl",      &sl.linear,    0.001f, 0.0f, 1.0f,  "%.4f");
-                    ImGui::DragFloat("Quadratic##sl",   &sl.quadratic, 0.001f, 0.0f, 0.5f,  "%.4f");
-                    // Show angles in degrees; store as cosines
-                    float innerDeg = acosf(sl.cutOff)      * (180.0f / pi);
-                    float outerDeg = acosf(sl.outerCutOff) * (180.0f / pi);
-                    if (ImGui::DragFloat("Inner Angle##sl", &innerDeg, 0.5f, 1.0f, 45.0f))
-                        sl.cutOff      = cosf(innerDeg * (pi / 180.0f));
-                    if (ImGui::DragFloat("Outer Angle##sl", &outerDeg, 0.5f, 1.0f, 60.0f))
-                        sl.outerCutOff = cosf(outerDeg * (pi / 180.0f));
-                    ImGui::TreePop();
-                }
-            }
-            if (scene.lights.numSpotLights < MAX_SPOT_LIGHTS) {
-                if (ImGui::Button("Add Spot Light"))
-                    scene.lights.addSpotLight(SpotLight{});
-            }
-
-            ImGui::Separator();
-            ImGui::ColorEdit3("Background", scene.backgroundColor);
-        }
-
-        // Stats
-        if (ImGui::CollapsingHeader("Statistics")) {
-            ImGui::Text("%.3f ms/frame  (%.1f FPS)",
-                1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-            ImGui::Text("Camera (%.2f, %.2f, %.2f)  Yaw %.1f°",
-                scene.camera.position.x, scene.camera.position.y, scene.camera.position.z,
-                scene.camera.yaw * 180.0f / pi);
-            ImGui::Text("Nodes: %d   Meshes: %d   PointLights: %d   SpotLights: %d",
-                (int)scene.nodes.size(), (int)scene.meshes.size(),
-                scene.lights.numPointLights, scene.lights.numSpotLights);
-        }
-
-        if (ImGui::CollapsingHeader("Help")) {
-            ImGui::BulletText("W/S: camera up/down");
-            ImGui::BulletText("A/D: camera left/right");
-            ImGui::BulletText("Up/Down Arrow: move forward/back");
-            ImGui::BulletText("Left/Right Arrow: rotate camera");
-        }
-
-        ImGui::Separator();
-        ImGui::End();
-    }
-    ImGui::Render();
 }

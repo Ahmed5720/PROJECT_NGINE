@@ -1,5 +1,6 @@
 #pragma once
 #include "Scene.h"
+#include "EditorUI.h"
 #include "miniVM.h"
 #include "geometry.h"
 #include "particleSimulation.h"
@@ -9,14 +10,27 @@
 
 class RenderPipeline {
 public:
-    RenderPipeline(shader* phongShader,ParticleRenderer* particleRenderer);
-    void render(Scene& scene, SPHSimulator& simulator, int viewportW, int viewportH, float zNear, float zFar);
+    RenderPipeline(shader* phongShader, ParticleRenderer* particleRenderer);
+    ~RenderPipeline();
+
+    void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
+
 private:
     void renderPhongPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
-    void renderImGui(Scene& scene, float pi);
     void uploadLighting(shader& s, const LightEnvironment& lights);
+    void resizeSceneFramebuffer(int w, int h);
+    void destroySceneFramebuffer();
     GLuint getWhiteTex();
+
     shader* phongShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
-    GLuint whiteTex_ = 0; 
+    EditorUI editorUI_;
+
+    GLuint sceneFbo_ = 0;
+    GLuint sceneColorTex_ = 0;
+    GLuint sceneDepthRbo_ = 0;
+    int sceneFbW_ = 0;
+    int sceneFbH_ = 0;
+
+    GLuint whiteTex_ = 0;
 };
