@@ -5,15 +5,10 @@
 #include <stb_image.h>
 #include <glad/glad.h>
 
-// ---------------------------------------------------------------------------
 // TextureLoader
 //   Stateless utility for loading image files into GL textures.
 //   Returns a TextureHandle (move-only RAII wrapper around GLuint).
 //
-//   Previously this logic lived as a file-scoped lambda in Application.cpp.
-//   Extracting it here means Application and future loaders can share it
-//   without duplicating the stb_image boilerplate.
-// ---------------------------------------------------------------------------
 namespace TextureLoader {
 
 // Load an image from disk and upload it to the GPU.

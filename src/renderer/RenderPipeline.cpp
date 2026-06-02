@@ -44,7 +44,8 @@ void RenderPipeline::render(Scene& scene, SPHSimulator& simulator, int viewportW
     mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
 
     renderPhongPass(scene, view, projection);
-    renderImGui(scene, PI, simulator);
+    //renderImGui(scene, PI, simulator);
+    renderImGui(scene, PI); 
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
@@ -160,9 +161,14 @@ void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat
         // Diffuse map
         glActiveTexture(GL_TEXTURE0);
         if (node.material.diffuseMap.valid())
+        {    std::cout << "found valid\n";
             glBindTexture(GL_TEXTURE_2D, node.material.diffuseMap.id);
+        }
         else
+        {
+            //std::cout << "invalid material, using white texture instead\n";
             glBindTexture(GL_TEXTURE_2D, getWhiteTex());
+        }
 
         // Specular map
         // If no dedicated specular map, reuse the diffuse map
@@ -195,7 +201,7 @@ GLuint RenderPipeline::getWhiteTex() {
 }
 
 // renderImGui
-void RenderPipeline::renderImGui(Scene& scene, float pi, SPHSimulator& simulator) {
+void RenderPipeline::renderImGui(Scene& scene, float pi) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -205,7 +211,7 @@ void RenderPipeline::renderImGui(Scene& scene, float pi, SPHSimulator& simulator
     if (scene.showControlWindow) {
         ImGui::Begin("Controls", &scene.showControlWindow);
 
-        // ---- SPH ----
+        //  SPH 
         if (ImGui::CollapsingHeader("SPH Simulation Parameters")) {
             ImGui::Text("Particle Count: %d", PARTICLE_COUNT);
             static float smoothingRadius   = SMOOTHING_RADIUS;

@@ -3,7 +3,7 @@
 #include "Config.h"
 #include "Scene.h"
 #include "RenderPipeline.h"
-#include "OBJLoader.h"
+//#include "OBJLoader.h"
 #include "ply_loader.h"
 #include "ParticleRenderer.h"
 #include "3DGS_renderer.h"
@@ -106,7 +106,7 @@ bool Application::init() {
     bool ok = OBJLoader.LoadFile(config_.objPath);
     if (ok) {
         for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes) {
-            // --- Build vertex buffer ---
+            // Build vertex buffer
             std::vector<Vertex> vertices;
             vertices.reserve(mesh.Vertices.size());
             for (const objl::Vertex& v : mesh.Vertices) {
@@ -162,7 +162,7 @@ bool Application::init() {
 
     scene_.camera.fovDeg = config_.fovDeg;
 
-    simulator_ = new SPHSimulator();
+    // simulator_ = new SPHSimulator();
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
     pipeline_ = new RenderPipeline(phongShader_, particleRenderer_);
@@ -175,7 +175,7 @@ bool Application::init() {
 void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
-        simulator_->step();
+        //simulator_->step();
         pipeline_->render(scene_, *simulator_,
             config_.windowWidth, config_.windowHeight,
             config_.zNear, config_.zFar);

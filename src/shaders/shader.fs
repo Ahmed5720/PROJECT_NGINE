@@ -1,10 +1,9 @@
 #version 430 core
 
 
-struct DirlLight
+struct DirLight
 {
-    vec3 position;
-
+    vec3 direction;
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -51,7 +50,7 @@ in vec3 FragPos;
 
 out vec4 FragColor;
 uniform DirLight dirLight;
-uniform PointLight pointLight[N_POINT_LIGHTS];
+uniform PointLight pointLights[N_POINT_LIGHTS];
 uniform SpotLight spotLight;
 uniform Material material;
 uniform vec3 viewPos;
@@ -70,11 +69,12 @@ void main()
     vec3 result = CalcDirLight(dirLight, normal, viewDir);
     for (int i= 0; i < N_POINT_LIGHTS; i++)
     {
-        result += CalcPointLight(pointLight[i], normal, FragPos, viewDir );
+        result += CalcPointLight(pointLights[i], normal, FragPos, viewDir );
     }
-    result += CalcSpotLight(spotLight, norm, FragPos, viewDir);   
+    result += CalcSpotLight(spotLight, normal, FragPos, viewDir);   
 
-    FragColor = vec4(result, 1.0);
+    FragColor = texture(material.diffuse, TexCoords);
+    //FragColor = vec4(result, 1.0);
 }
 vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
@@ -96,7 +96,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
     specular *= attenuation;
     return (ambient + diffuse + specular);
 }
-vec3 CalcDirLight()
+vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
 {
     vec3 lightDir = normalize(-light.direction);
     // diffuse shading
