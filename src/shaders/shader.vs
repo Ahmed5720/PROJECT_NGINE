@@ -7,8 +7,8 @@ uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
-out vec2 vUV;
-out vec3 vNormalWS;
+out vec2 TexCoords;
+out vec3 Normal;
 out vec3 FragPos;
 
 void main()
@@ -17,7 +17,6 @@ void main()
     FragPos = vec3(model * vec4(aPos, 1.0));
     // Calculate normal matrix (transpose(inverse(model)) for non-uniform scaling)
     mat3 normalMatrix = transpose(inverse(mat3(model)));
-    vNormalWS = normalize(normalMatrix * aNormal);
-    
-    vUV = aUV;
+    Normal = normalize(normalMatrix * aNormal);
+    TexCoords = aUV;
 }

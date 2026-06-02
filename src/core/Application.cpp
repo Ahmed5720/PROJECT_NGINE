@@ -3,7 +3,8 @@
 #include "Config.h"
 #include "Scene.h"
 #include "RenderPipeline.h"
-#include "OBJLoader.h"
+#include "EditorUI.h"
+//#include "OBJLoader.h"
 #include "ply_loader.h"
 #include "ParticleRenderer.h"
 #include "3DGS_renderer.h"
@@ -93,7 +94,7 @@ bool Application::init() {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui::StyleColorsDark();
+    EditorUI::applyDarkTheme();
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 430");
 
@@ -106,7 +107,7 @@ bool Application::init() {
     bool ok = OBJLoader.LoadFile(config_.objPath);
     if (ok) {
         for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes) {
-            // --- Build vertex buffer ---
+            // Build vertex buffer
             std::vector<Vertex> vertices;
             vertices.reserve(mesh.Vertices.size());
             for (const objl::Vertex& v : mesh.Vertices) {
@@ -139,10 +140,11 @@ bool Application::init() {
             //float ksAvg = (mesh.MeshMaterial.Ks.X + mesh.MeshMaterial.Ks.Y + mesh.MeshMaterial.Ks.Z) / 3.0f;
             //mat.specularStrength = (ksAvg > 0.0f) ? ksAvg : 0.5f;
  
-            // Diffuse texture (map_Kd)
+            // Diffuse texture (map_Kd) — paths from broncoScene.mtl, files in src/textures/
             if (!mesh.MeshMaterial.map_Kd.empty()) {
-                std::string texPath = config_.texturePath + "/" + mesh.MeshMaterial.map_Kd;
-                mat.diffuseMap = TextureLoader::load(texPath);
+                std::string resolved;
+                mat.diffuseMap = TextureLoader::loadMapKd(
+                    config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Kd, &resolved);
             }
  
             // Create SceneNode 
@@ -162,7 +164,7 @@ bool Application::init() {
 
     scene_.camera.fovDeg = config_.fovDeg;
 
-    simulator_ = new SPHSimulator();
+    // simulator_ = new SPHSimulator();
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
     pipeline_ = new RenderPipeline(phongShader_, particleRenderer_);
@@ -175,8 +177,8 @@ bool Application::init() {
 void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
-        simulator_->step();
-        pipeline_->render(scene_, *simulator_,
+        // if (simulator_) simulator_->step();
+        pipeline_->render(scene_,
             config_.windowWidth, config_.windowHeight,
             config_.zNear, config_.zFar);
         glfwSwapBuffers(window_);

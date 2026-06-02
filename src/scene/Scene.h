@@ -75,9 +75,6 @@ struct Scene {
     float backgroundColor[3] = {0.2f, 0.5f, 0.5f};
 
 
-    //bool showDemoWindow   = false;
-    bool showControlWindow = true;
-
     void destroy() {
         for (auto &mesh : meshes)
             mesh.destroy();

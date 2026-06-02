@@ -8,30 +8,35 @@
             "args": [
                 "-g",
                 "-std=c++17",
+                "-I${workspaceFolder}/src",
+                "-I${workspaceFolder}/src/core",
+                "-I${workspaceFolder}/src/models",
+                "-I${workspaceFolder}/src/renderer",
+                "-I${workspaceFolder}/src/scene",
+                "-I${workspaceFolder}/src/physics",
+                "-I${workspaceFolder}/src/textures",
                 "-I${workspaceFolder}/include",
-                "-I${workspaceFolder}/include/imgui",  // Add ImGui include path
+                "-I${workspaceFolder}/include/imgui",
                 "-L${workspaceFolder}/lib",
-                
-                
-                "${workspaceFolder}/src/main.cpp",
+
+                "${workspaceFolder}/src/core/main.cpp",
+                "${workspaceFolder}/src/core/Application.cpp",
+                "${workspaceFolder}/src/renderer/RenderPipeline.cpp",
+                "${workspaceFolder}/src/renderer/EditorUI.cpp",
                 "${workspaceFolder}/src/glad.c",
-                "${workspaceFolder}/src/stb_image.h",
-                
-                // ImGui source files
+
                 "${workspaceFolder}/src/imgui.cpp",
                 "${workspaceFolder}/src/imgui_draw.cpp",
                 "${workspaceFolder}/src/imgui_widgets.cpp",
                 "${workspaceFolder}/src/imgui_tables.cpp",
                 "${workspaceFolder}/src/imgui_impl_glfw.cpp",
                 "${workspaceFolder}/src/imgui_impl_opengl3.cpp",
-                
-                // Libraries
+
                 "-lglfw3dll",
-                "-lopengl32",  // Windows OpenGL library
-                
-                // Output
+                "-lopengl32",
+
                 "-o",
-                "${workspaceFolder}/cutable.exe"
+                "${workspaceFolder}/ngine.exe"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

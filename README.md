@@ -12,7 +12,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - phong shading, texture sampling.
 - SPH fluid simulation
 - Gaussian Splatting (WIP)  
-![Alt text](media/BroncoScene.png "Static Scene featuring Various meshs and textures")
+![Alt text](media/viewport.jpg "Static Scene featuring Various meshs and textures")
 
 
 ## Smoothed particle hydrodynamics fluid simulation
@@ -51,7 +51,6 @@ The engine is structured as:
 - **Camera** – Position, yaw (radians), up vector, FOV. Produces view matrix via look-at + invert and projection via a custom perspective helper.
 - **RenderPipeline** – Given scene and simulator, performs a fixed draw order: clear → Phong mesh → (optional) Gaussian splats → particles → ImGui. It also runs the ImGui control panels and syncs them with the scene.
 
-**approach:** One application, one scene, one pipeline, explicit ownership (Application owns subsystems, Scene owns mesh/Gaussians/camera). No ECS, no generic “entity” list.
 
 
 

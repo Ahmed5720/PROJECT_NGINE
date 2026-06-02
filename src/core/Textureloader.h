@@ -5,27 +5,21 @@
 #include <stb_image.h>
 #include <glad/glad.h>
 
-// ---------------------------------------------------------------------------
 // TextureLoader
 //   Stateless utility for loading image files into GL textures.
 //   Returns a TextureHandle (move-only RAII wrapper around GLuint).
 //
-//   Previously this logic lived as a file-scoped lambda in Application.cpp.
-//   Extracting it here means Application and future loaders can share it
-//   without duplicating the stb_image boilerplate.
-// ---------------------------------------------------------------------------
 namespace TextureLoader {
 
-// Load an image from disk and upload it to the GPU.
-// Returns an invalid TextureHandle (id == 0) on failure.
-inline TextureHandle load(const std::string& path) {
+inline TextureHandle loadFromFile(const std::string& path, bool logOnFailure) {
     if (path.empty()) return TextureHandle{};
 
     int width, height, channels;
     unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
     if (!data) {
-        std::cerr << "[TextureLoader] Failed to load '" << path
-                  << "': " << stbi_failure_reason() << "\n";
+        if (logOnFailure)
+            std::cerr << "[TextureLoader] Failed to load '" << path
+                      << "': " << stbi_failure_reason() << "\n";
         return TextureHandle{};
     }
 
@@ -35,8 +29,9 @@ inline TextureHandle load(const std::string& path) {
         case 3:  format = GL_RGB;  break;
         case 4:  format = GL_RGBA; break;
         default:
-            std::cerr << "[TextureLoader] Unsupported channel count " << channels
-                      << " for '" << path << "'\n";
+            if (logOnFailure)
+                std::cerr << "[TextureLoader] Unsupported channel count " << channels
+                          << " for '" << path << "'\n";
             stbi_image_free(data);
             return TextureHandle{};
     }
@@ -57,15 +52,51 @@ inline TextureHandle load(const std::string& path) {
     return TextureHandle{id};
 }
 
-// Resolve a texture filename relative to the directory of an OBJ file.
-// e.g. resolveRelative("/assets/models/car.obj", "car_body.png")
-//      -> "/assets/models/car_body.png"
+// Load an image from disk and upload it to the GPU.
+inline TextureHandle load(const std::string& path) {
+    return loadFromFile(path, true);
+}
+
+// Resolve a texture filename relative to the directory of an OBJ/MTL file.
 inline std::string resolveRelative(const std::string& objPath,
                                    const std::string& textureName) {
     if (textureName.empty()) return {};
     size_t slash = objPath.find_last_of("/\\");
     std::string dir = (slash != std::string::npos) ? objPath.substr(0, slash + 1) : "";
     return dir + textureName;
+}
+
+// Load map_Kd from MTL: try asset texture dir, then beside OBJ/MTL, then obj/textures/.
+inline TextureHandle loadMapKd(const std::string& objPath,
+                               const std::string& textureDir,
+                               const std::string& mapKd,
+                               std::string* resolvedPath = nullptr) {
+    if (mapKd.empty()) return {};
+
+    const std::string besideObj = resolveRelative(objPath, mapKd);
+    const std::string besideTextures = resolveRelative(objPath, "textures/" + mapKd);
+    const std::string inTextureDir =
+        textureDir.empty() ? std::string() : (textureDir.back() == '/' || textureDir.back() == '\\'
+            ? textureDir + mapKd
+            : textureDir + "/" + mapKd);
+
+    const char* candidates[] = { inTextureDir.c_str(), besideObj.c_str(), besideTextures.c_str() };
+
+    for (const char* path : candidates) {
+        if (!path || !path[0]) continue;
+        TextureHandle handle = loadFromFile(path, false);
+        if (handle.valid()) {
+            if (resolvedPath) *resolvedPath = path;
+            std::cout << "[TextureLoader] Loaded '" << mapKd << "' from '" << path << "'\n";
+            return handle;
+        }
+    }
+
+    std::cerr << "[TextureLoader] Could not find '" << mapKd << "'\n"
+              << "  texture dir: " << (inTextureDir.empty() ? "(none)" : inTextureDir) << "\n"
+              << "  OBJ folder:  " << besideObj << "\n"
+              << "  OBJ/textures: " << besideTextures << "\n";
+    return {};
 }
 
 } 
