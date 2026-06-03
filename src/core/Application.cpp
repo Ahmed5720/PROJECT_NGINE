@@ -19,6 +19,7 @@
 #include <vector> 
 #include "OBJ_Loader.h"
 
+
 namespace {
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     void* user = glfwGetWindowUserPointer(window);
@@ -106,6 +107,10 @@ bool Application::init() {
     objl::Loader OBJLoader;
     bool ok = OBJLoader.LoadFile(config_.objPath);
     if (ok) {
+        const float U = 1000;
+        const float D = -1000;
+        vec3f min = {U,U,U};
+        vec3f max = {D,D,D};
         for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes) {
             // Build vertex buffer
             std::vector<Vertex> vertices;
@@ -117,13 +122,24 @@ bool Application::init() {
                     v.TextureCoordinate.X,
                     1.0f - v.TextureCoordinate.Y   // flip V (OBJ origin is bottom-left)
                 });
+                min.X = std::min(min.X, v.Position.x);
+                min.Y = std::min(min.Y, v.Position.Y);
+                min.Z = std::min(min.Z, v.Position.Z);
+                max.X = std::max(max.X, v.Position.x);
+                max.Y = std::max(max.Y, v.Position.y);
+                max.X = std::max(max.Z, v.Position.z);
+
             }
- 
             // Upload to GPU 
             MeshGPU gpuMesh;
             gpuMesh.upload(vertices, mesh.Indices);
             int meshIndex = static_cast<int>(scene_.meshes.size());
             scene_.meshes.push_back(std::move(gpuMesh));
+            // set up rigidbody local bounds
+            RigidBody rb;
+            rb.localMax = max;
+            rb.localMin = min;
+            scene_.rbs.push_back(rb);
  
             // Build Material from the MTL entry 
             Material mat;
@@ -145,6 +161,8 @@ bool Application::init() {
                 std::string resolved;
                 mat.diffuseMap = TextureLoader::loadMapKd(
                     config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Kd, &resolved);
+                mat.specularMap = TextureLoader::loadMapKd(
+                    config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Ks, &resolved);
             }
  
             // Create SceneNode 

@@ -4,7 +4,7 @@
 #include <vector>
 #include "Material.h"
 #include "LightEnvironment.h"
-
+#include "physX.h"
 // represents a renderable object in the world
 // meshGPU is referenced by indexing into Scene::meshes so two nodes can share the same geometry
 // RigidBody handle is an index into physicsWorld::bodies
@@ -21,9 +21,9 @@ struct SceneNode
 
     // resource handles
     int meshIndex = -1;
-    int rigidBodyHandle = -1;
-
-
+    int rbIndex;
+    
+    
     // Compose the model matrix from position/rotation/scale.
     // Rotation order: Rx * Ry * Rz (XYZ Euler, degrees).
     mat4x4 modelMatrix() const {
@@ -36,8 +36,8 @@ struct SceneNode
         // T * Rz * Ry * Rx * S  (column-major convention: applied right to left)
         return matrix_matmul(T, matrix_matmul(Rz, matrix_matmul(Ry, matrix_matmul(Rx, S))));
     }
-
-
+    
+    
     // material
     Material material;
     //flags
@@ -59,6 +59,7 @@ struct Scene {
 
     std::vector<SceneNode> nodes;
     std::vector<MeshGPU> meshes;
+    std::vector<RigidBody> rbs;
 
     LightEnvironment lights;
 
