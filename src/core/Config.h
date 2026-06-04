@@ -56,7 +56,7 @@ struct Config {
         gaussianFsPath = slash(shaderDir, "gaussian.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "desk.obj");
+        objPath        = slash(objPath, "bronco2.obj");
         texturePath    = slash(basePath, "textures");
     }
 };

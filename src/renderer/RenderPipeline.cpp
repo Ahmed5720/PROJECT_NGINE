@@ -5,7 +5,6 @@
 #include <glad/glad.h>
 #include <iostream>
 #include <string>
-
 namespace {
 const float PI = 3.14159265f;
 
@@ -33,7 +32,9 @@ void checkGLError(const char* ctx) {
 } // namespace
 
 RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer)
-    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) {}
+    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) {
+    wireFrameMesh_.init();
+}
 
 RenderPipeline::~RenderPipeline() {
     destroySceneFramebuffer();
@@ -105,6 +106,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const mat4x4 view = scene.camera.getViewMatrix();
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
         renderPhongPass(scene, view, projection);
+        renderWireframePass(scene, view, projection);
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
@@ -240,28 +242,27 @@ void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat
 }
 void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection)
 {
+    if (!drawBoundingBox)
+        return;
+
     wireFrameShader_->use();
-     // Per-frame: matrices
-    setMat4(* wireFrameShader_, "view",       view);
-    setMat4(* wireFrameShader_, "projection", projection);
+    setMat4(*wireFrameShader_, "view", view);
+    setMat4(*wireFrameShader_, "projection", projection);
+    // Corners are already in world space from updateWorldBounds.
+    setMat4(*wireFrameShader_, "model", matrix_makeIdentitY());
 
-    // Per-frame: camera position
-     wireFrameShader_->setFloat3("Color", 0.0f, 1.0f, 0.0f);
-     glDisable(GL_DEPTH_TEST);
-     glLineWidth(1.5f);
+    wireFrameShader_->setFloat3("Color", 0.0f, 1.0f, 0.0f);
+    glDisable(GL_DEPTH_TEST);
+    glLineWidth(1.5f);
 
-    // Per-node draw
     for (const SceneNode& node : scene.nodes) {
-        if (!node.visible)                continue;
-        if (node.rbIndex < 0 || node.rbIndex >= (int)scene.rbs.size()) continue;
-
-        // // Model matrix
-        // mat4x4 model = node.modelMatrix();
-        // setMat4(* wireFrameShader_, "model", model);
+        if (!node.visible)
+            continue;
+        if (node.rbIndex < 0 || node.rbIndex >= static_cast<int>(scene.rbs.size()))
+            continue;
 
         const RigidBody& rb = scene.rbs[node.rbIndex];
         wireFrameMesh_.draw(rb.worldMin, rb.worldMax);
-        
     }
     glEnable(GL_DEPTH_TEST);
     glLineWidth(1.0f);

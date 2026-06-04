@@ -88,6 +88,19 @@ struct vec4f
 
 };
 
+inline vec3f vecMin(const vec3f& a, const vec3f& b) {
+    return {std::min(a.X, b.X), std::min(a.Y, b.Y), std::min(a.Z, b.Z)};
+}
+inline vec3f vecMax(const vec3f& a, const vec3f& b) {
+    return {std::max(a.X, b.X), std::max(a.Y, b.Y), std::max(a.Z, b.Z)};
+}
+
+inline vec3f operator*(vec3f& v, const float f)
+{
+    v.X *= f; v.Y *= f; v.Z *= f;
+    return v;
+}
+
 inline vec3f& operator+=(vec3f& v1, const vec3f& v2) {
     v1.X += v2.X; v1.Y += v2.Y; v1.Z += v2.Z;
     return v1;
@@ -96,7 +109,16 @@ inline vec3f& operator*=(vec3f& v1, const vec3f& v2) {
     v1.X *= v2.X; v1.Y *= v2.Y; v1.Z *= v2.Z;
     return v1;
 }
-
+inline vec3f& operator/=(vec3f& v1, const float f1)
+{
+    v1.X /= f1; v1.Y /= f1; v1.Z /= f1;
+    return v1;
+}
+inline vec3f& operator/(vec3f& v1, const float f1)
+{
+    v1.X /= f1; v1.Y /= f1; v1.Z /= f1;
+    return v1;
+}
 struct mat4x4 {
     float m[4][4] = {0};
 };

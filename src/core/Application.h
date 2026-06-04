@@ -29,7 +29,7 @@ private:
     bool initialized_ = false;
 
     Scene scene_;
-    SPHSimulator* simulator_ = nullptr;
+    PhysX* simulator_ = nullptr;
     shader* phongShader_ = nullptr;
     shader* wireFrameShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;

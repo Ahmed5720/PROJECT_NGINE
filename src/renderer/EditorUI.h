@@ -32,7 +32,7 @@ private:
 
     void drawLightingSection(Scene& scene, float pi);
     void drawCameraSection(Scene& scene, float pi);
-    void drawPhysicsSection();
+    void drawPhysicsSection(Scene& scene);
     void drawSelectedNodeSection(Scene& scene);
 
     int selectedNode_ = -1;

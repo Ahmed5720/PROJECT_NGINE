@@ -21,7 +21,7 @@ struct SceneNode
 
     // resource handles
     int meshIndex = -1;
-    int rbIndex;
+    int rbIndex = -1;
     
     
     // Compose the model matrix from position/rotation/scale.

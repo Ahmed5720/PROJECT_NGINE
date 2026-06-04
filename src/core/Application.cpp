@@ -113,11 +113,12 @@ bool Application::init() {
     objl::Loader OBJLoader;
     bool ok = OBJLoader.LoadFile(config_.objPath);
     if (ok) {
-        const float U = 1000;
-        const float D = -1000;
-        vec3f min = {U,U,U};
-        vec3f max = {D,D,D};
+        const float U = 1000.0f;
+        const float D = -1000.0f;
         for (const objl::Mesh& mesh : OBJLoader.LoadedMeshes) {
+            vec3f min = {U, U, U};
+            vec3f max = {D, D, D};
+
             // Build vertex buffer
             std::vector<Vertex> vertices;
             vertices.reserve(mesh.Vertices.size());
@@ -128,23 +129,23 @@ bool Application::init() {
                     v.TextureCoordinate.X,
                     1.0f - v.TextureCoordinate.Y   // flip V (OBJ origin is bottom-left)
                 });
-                min.X = std::min(min.X, v.Position.x);
+                min.X = std::min(min.X, v.Position.X);
                 min.Y = std::min(min.Y, v.Position.Y);
                 min.Z = std::min(min.Z, v.Position.Z);
-                max.X = std::max(max.X, v.Position.x);
-                max.Y = std::max(max.Y, v.Position.y);
-                max.X = std::max(max.Z, v.Position.z);
-
+                max.X = std::max(max.X, v.Position.X);
+                max.Y = std::max(max.Y, v.Position.Y);
+                max.Z = std::max(max.Z, v.Position.Z);
             }
             // Upload to GPU 
             MeshGPU gpuMesh;
             gpuMesh.upload(vertices, mesh.Indices);
             int meshIndex = static_cast<int>(scene_.meshes.size());
             scene_.meshes.push_back(std::move(gpuMesh));
-            // set up rigidbody local bounds
+
+            const int rbIndex = static_cast<int>(scene_.rbs.size());
             RigidBody rb;
-            rb.localMax = max;
             rb.localMin = min;
+            rb.localMax = max;
             scene_.rbs.push_back(rb);
  
             // Build Material from the MTL entry 
@@ -173,7 +174,8 @@ bool Application::init() {
  
             // Create SceneNode 
             SceneNode& node = scene_.addNode(mesh.MeshName, meshIndex, std::move(mat));
- 
+            node.rbIndex = rbIndex;
+
             std::cout << "[Application] Loaded mesh '" << node.name << "'"
                       << "  verts="   << mesh.Vertices.size()
                       << "  indices=" << mesh.Indices.size()
@@ -189,6 +191,7 @@ bool Application::init() {
     scene_.camera.fovDeg = config_.fovDeg;
 
     // simulator_ = new SPHSimulator();
+    simulator_ = new PhysX(scene_);
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
     pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_);
@@ -202,6 +205,7 @@ void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
         // if (simulator_) simulator_->step();
+        simulator_->step(0.0001f, scene_);
         pipeline_->render(scene_,
             config_.windowWidth, config_.windowHeight,
             config_.zNear, config_.zFar);

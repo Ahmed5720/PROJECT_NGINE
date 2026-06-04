@@ -227,9 +227,9 @@ struct WireFrameMesh
     void draw(const vec3f& worldMin, const vec3f& worldMax) const
     {
         // Expand AABB into 8 corners — same bit trick as updateWorldBounds.
-        const float cx[2] = { worldMin.x, worldMax.x };
-        const float cy[2] = { worldMin.y, worldMax.y };
-        const float cz[2] = { worldMin.z, worldMax.z };
+        const float cx[2] = { worldMin.X, worldMax.X };
+        const float cy[2] = { worldMin.Y, worldMax.Y };
+        const float cz[2] = { worldMin.Z, worldMax.Z };
 
         float corners[8][3];
         for (int k = 0; k < 8; ++k)

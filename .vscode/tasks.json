@@ -23,6 +23,7 @@
                 "${workspaceFolder}/src/core/Application.cpp",
                 "${workspaceFolder}/src/renderer/RenderPipeline.cpp",
                 "${workspaceFolder}/src/renderer/EditorUI.cpp",
+                "${workspaceFolder}/src/physics/PhysX.cpp",
                 "${workspaceFolder}/src/glad.c",
 
                 "${workspaceFolder}/src/imgui.cpp",

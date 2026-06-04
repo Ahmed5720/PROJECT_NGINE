@@ -10,7 +10,7 @@
 
 class RenderPipeline {
 public:
-    bool drawBoundingBox = false;
+    bool drawBoundingBox = true;
     RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer);
     ~RenderPipeline();
 

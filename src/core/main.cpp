@@ -6,8 +6,8 @@ int main(int argc, char** argv) {
     AppArgs args = parseArgs(argc, argv);
 
     Config config;
-    config.windowWidth  = 1200;
-    config.windowHeight = 1200;
+    config.windowWidth  = 1920;
+    config.windowHeight = 1080;
     config.fovDeg      = 90.0f;
     config.zNear       = 0.1f;
     config.zFar        = 1000.0f;

@@ -1,0 +1,10 @@
+{
+  "files.associations": {
+    "*.vs": "glsl",
+    "*.fs": "glsl",
+    "*.glsl": "glsl"
+  },
+  "glsl-lint.glslVersion": "430",
+  "glsl-lint.targetProfile": "desktop_430",
+  "glsl.glslversion": "430"
+}

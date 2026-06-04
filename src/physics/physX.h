@@ -29,9 +29,8 @@ class PhysX
         explicit PhysX(Scene& scene);
         ~PhysX() = default;
         void step(float dt, Scene& scene);
-    private:
-        void calcLocalBounds(Scene& s); // only at start
         void updateWorldBounds(Scene& scene);
+    private:
         void resolveCollision(Scene& scene);
         void integrate(Scene& scene);
         std::vector<int> activeRbIndices;

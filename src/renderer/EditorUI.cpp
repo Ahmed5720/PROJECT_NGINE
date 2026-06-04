@@ -158,7 +158,7 @@ void EditorUI::drawPropertiesPanel(Scene& scene, const Layout& layout) {
         drawLightingSection(scene, pi);
 
     if (ImGui::CollapsingHeader("Physics"))
-        drawPhysicsSection();
+        drawPhysicsSection(scene);
 
     if (ImGui::CollapsingHeader("Environment")) {
         ImGui::ColorEdit3("Background", scene.backgroundColor);
@@ -229,6 +229,17 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
     ImGui::DragFloat("Shininess", &node.material.shininess, 1.f, 1.f, 256.f);
     ImGui::Text("Diffuse:  %s", node.material.diffuseMap.valid() ? "loaded" : "fallback");
     ImGui::Text("Specular: %s", node.material.specularMap.valid() ? "loaded" : "fallback");
+
+    ImGui::Separator();
+    ImGui::Text("Rigid Body");
+    if (node.rbIndex < 0 || node.rbIndex >= static_cast<int>(scene.rbs.size())) {
+        ImGui::TextDisabled("(no rigid body)");
+        return;
+    }
+
+    RigidBody& rb = scene.rbs[node.rbIndex];
+    ImGui::Checkbox("Static##rb", &rb.isStatic);
+    ImGui::Checkbox("Use Gravity##rb", &rb.useGravity);
 }
 
 void EditorUI::drawCameraSection(Scene& scene, float pi) {
@@ -299,8 +310,20 @@ void EditorUI::drawLightingSection(Scene& scene, float pi) {
         scene.lights.addSpotLight(SpotLight{});
 }
 
-void EditorUI::drawPhysicsSection() {
-    ImGui::TextDisabled("No physics system connected.");
+void EditorUI::drawPhysicsSection(Scene& scene) {
+    if (selectedNode_ < 0 || selectedNode_ >= static_cast<int>(scene.nodes.size())) {
+        ImGui::TextDisabled("Select a node in the Scene Graph.");
+    } else {
+        SceneNode& node = scene.nodes[selectedNode_];
+        if (node.rbIndex < 0 || node.rbIndex >= static_cast<int>(scene.rbs.size())) {
+            ImGui::TextDisabled("Selected node has no rigid body.");
+        } else {
+            RigidBody& rb = scene.rbs[node.rbIndex];
+            ImGui::Text("Node: %s", node.name.c_str());
+            ImGui::Checkbox("Static##phys", &rb.isStatic);
+            ImGui::Checkbox("Use Gravity##phys", &rb.useGravity);
+        }
+    }
     ImGui::Spacing();
     if (ImGui::CollapsingHeader("SPH (preview)", ImGuiTreeNodeFlags_None)) {
         ImGui::TextDisabled("Parameters reserved for future SPH integration.");
