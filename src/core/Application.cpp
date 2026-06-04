@@ -48,6 +48,11 @@ Application::~Application() {
         phongShader_->deleteProgram();
         delete phongShader_;
     }
+    if (wireFrameShader_)
+    {
+        wireFrameShader_->deleteProgram();
+        delete wireFrameShader_;
+    }
     scene_.destroy();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -100,6 +105,7 @@ bool Application::init() {
     ImGui_ImplOpenGL3_Init("#version 430");
 
     phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
+    wireFrameShader_ = new shader(config_.wireVsPath.c_str(), config_.wireFsPath.c_str());
 
     // Load OBJ: each OBJ sub-mesh becomes one SceneNode with its own
     // Material.  The MeshGPU (GPU buffers) lives in scene_.meshes and
@@ -185,7 +191,7 @@ bool Application::init() {
     // simulator_ = new SPHSimulator();
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
-    pipeline_ = new RenderPipeline(phongShader_, particleRenderer_);
+    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_);
 
     glfwSwapInterval(1);
     initialized_ = true;

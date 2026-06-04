@@ -32,8 +32,8 @@ void checkGLError(const char* ctx) {
 }
 } // namespace
 
-RenderPipeline::RenderPipeline(shader* phongShader, ParticleRenderer* particleRenderer)
-    : phongShader_(phongShader), particleRenderer_(particleRenderer) {}
+RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer)
+    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) {}
 
 RenderPipeline::~RenderPipeline() {
     destroySceneFramebuffer();
@@ -238,7 +238,35 @@ void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat
 
     checkGLError("renderPhongPass");
 }
+void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection)
+{
+    wireFrameShader_->use();
+     // Per-frame: matrices
+    setMat4(* wireFrameShader_, "view",       view);
+    setMat4(* wireFrameShader_, "projection", projection);
 
+    // Per-frame: camera position
+     wireFrameShader_->setFloat3("Color", 0.0f, 1.0f, 0.0f);
+     glDisable(GL_DEPTH_TEST);
+     glLineWidth(1.5f);
+
+    // Per-node draw
+    for (const SceneNode& node : scene.nodes) {
+        if (!node.visible)                continue;
+        if (node.rbIndex < 0 || node.rbIndex >= (int)scene.rbs.size()) continue;
+
+        // // Model matrix
+        // mat4x4 model = node.modelMatrix();
+        // setMat4(* wireFrameShader_, "model", model);
+
+        const RigidBody& rb = scene.rbs[node.rbIndex];
+        wireFrameMesh_.draw(rb.worldMin, rb.worldMax);
+        
+    }
+    glEnable(GL_DEPTH_TEST);
+    glLineWidth(1.0f);
+    checkGLError("renderLinePass");
+}
 // getWhiteTex
 //   Lazy-initialises a 1×1 white RGBA texture used as a fallback when a
 //   node has no diffuse or specular map. 

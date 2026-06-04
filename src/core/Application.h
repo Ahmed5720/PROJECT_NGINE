@@ -31,6 +31,7 @@ private:
     Scene scene_;
     SPHSimulator* simulator_ = nullptr;
     shader* phongShader_ = nullptr;
+    shader* wireFrameShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     GaussianRenderer* gaussianRenderer_ = nullptr;
     RenderPipeline* pipeline_ = nullptr;

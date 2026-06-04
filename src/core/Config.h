@@ -28,6 +28,8 @@ struct Config {
     std::string shaderDir;
     std::string phongVsPath;
     std::string phongFsPath;
+    std::string wireVsPath;
+    std::string wireFsPath;
     std::string particleVsPath;
     std::string particleFsPath;
     std::string gaussianVsPath;
@@ -46,6 +48,8 @@ struct Config {
         shaderDir      = slash(basePath, "shaders");
         phongVsPath    = slash(shaderDir, "shader.vs");
         phongFsPath    = slash(shaderDir, "shader.fs");
+        wireVsPath     = slash(shaderDir, "wireFrame.vs");
+        wireFsPath     = slash(shaderDir, "wireFrame.fs");
         particleVsPath = slash(shaderDir, "particle.vs");
         particleFsPath = slash(shaderDir, "particle.fs");
         gaussianVsPath = slash(shaderDir, "gaussian.vs");

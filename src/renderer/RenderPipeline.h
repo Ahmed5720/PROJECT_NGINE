@@ -10,18 +10,21 @@
 
 class RenderPipeline {
 public:
-    RenderPipeline(shader* phongShader, ParticleRenderer* particleRenderer);
+    bool drawBoundingBox = false;
+    RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer);
     ~RenderPipeline();
 
     void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
 
 private:
     void renderPhongPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
+    void renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void uploadLighting(shader& s, const LightEnvironment& lights);
     void resizeSceneFramebuffer(int w, int h);
     void destroySceneFramebuffer();
     GLuint getWhiteTex();
-
+    WireFrameMesh wireFrameMesh_;
+    shader* wireFrameShader_ = nullptr;
     shader* phongShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     EditorUI editorUI_;

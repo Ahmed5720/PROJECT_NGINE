@@ -188,6 +188,72 @@ struct MeshGPU
     }
 
 };
+
+struct WireFrameMesh
+{
+    GLuint vao = 0, vbo = 0, ebo = 0;
+
+    // Call once at startup — uploads the static edge index buffer.
+    // The VBO is left as dynamic storage; corners are streamed each draw.
+    void init()
+    {
+        if (vao) return;
+
+        // 12 edges × 2 verts = 24 indices.
+        static const uint16_t kEdges[24] = {
+            0,1, 1,3, 3,2, 2,0,   // bottom face
+            4,5, 5,7, 7,6, 6,4,   // top face
+            0,4, 1,5, 2,6, 3,7    // vertical edges
+        };
+
+        glGenVertexArrays(1, &vao);
+        glGenBuffers(1, &vbo);
+        glGenBuffers(1, &ebo);
+
+        glBindVertexArray(vao);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, 8 * 3 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(kEdges), kEdges, GL_STATIC_DRAW);
+
+        glBindVertexArray(0);
+    }
+
+    // Stream world-space corners from a pre-computed AABB and draw.
+    void draw(const vec3f& worldMin, const vec3f& worldMax) const
+    {
+        // Expand AABB into 8 corners — same bit trick as updateWorldBounds.
+        const float cx[2] = { worldMin.x, worldMax.x };
+        const float cy[2] = { worldMin.y, worldMax.y };
+        const float cz[2] = { worldMin.z, worldMax.z };
+
+        float corners[8][3];
+        for (int k = 0; k < 8; ++k)
+        {
+            corners[k][0] = cx[(k >> 0) & 1];
+            corners[k][1] = cy[(k >> 1) & 1];
+            corners[k][2] = cz[(k >> 2) & 1];
+        }
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(corners), corners);
+
+        glBindVertexArray(vao);
+        glDrawElements(GL_LINES, 24, GL_UNSIGNED_SHORT, 0);
+        glBindVertexArray(0);
+    }
+
+    void destroy()
+    {
+        if (ebo) { glDeleteBuffers(1, &ebo);      ebo = 0; }
+        if (vbo) { glDeleteBuffers(1, &vbo);      vbo = 0; }
+        if (vao) { glDeleteVertexArrays(1, &vao); vao = 0; }
+    }
+};
 // the asstute observer should note that Gaussians are not actual geometry.
 struct Gaussian{
     Vector3 pos;  // world space

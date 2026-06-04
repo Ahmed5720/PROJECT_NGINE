@@ -1,6 +1,6 @@
 #pragma once
-#include "Scene.h"
 #include "miniVM.h"
+struct Scene;// forward declaration
 struct RigidBody
 {
     vec3f localMin = {0,0,0}; // local bounding box x,y,z min and max determined by scene node mesh at initialization
