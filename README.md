@@ -16,7 +16,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - PhysX a work in progress
  
 ![Alt text](media/bronco2.png)
-![Alt text](media/viewport2.png)
+![Alt text](media/viewport2.jpg)
 
 
 ## TBD
