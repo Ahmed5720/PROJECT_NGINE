@@ -13,14 +13,16 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - phong shading with diffuse and specular texture mapping.
 - ligting (Directional, Point, and Spot Lights)
 - UI system
+- PhysX a work in progress
  
-![Alt text](media/viewport.jpg "Static Scene featuring Various meshs and textures")
+![Alt text](media/bronco2.png)
+![Alt text](media/viewport2.png)
 
 
 ## TBD
+- PhysX (a system to support rigid body physics and particle simulations)
 - Shadows
 - multiple rendering passes (deferred rendering)
-- PhysX (a system to support rigid body physics and particle simulations)
   
 
 
