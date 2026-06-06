@@ -10,11 +10,12 @@
 
 class RenderPipeline {
 public:
-    bool drawBoundingBox = true;
+    bool drawBoundingBox = false;
     RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer);
     ~RenderPipeline();
 
     void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
+    bool takeShootRequest();
 
 private:
     void renderPhongPass(Scene& scene, const mat4x4& view, const mat4x4& projection);

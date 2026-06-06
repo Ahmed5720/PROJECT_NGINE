@@ -79,6 +79,13 @@ void EditorUI::beginFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    shootRequested_ = false;
+}
+
+bool EditorUI::takeShootRequest() {
+    const bool requested = shootRequested_;
+    shootRequested_ = false;
+    return requested;
 }
 
 EditorUI::Layout EditorUI::computeLayout(int framebufferW, int framebufferH) const {
@@ -92,9 +99,9 @@ EditorUI::Layout EditorUI::computeLayout(int framebufferW, int framebufferH) con
     return L;
 }
 
-void EditorUI::draw(Scene& scene, unsigned int viewportColorTex, const Layout& layout) {
+void EditorUI::draw(Scene& scene, unsigned int viewportColorTex, const Layout& layout, bool* drawBoundingBox) {
     drawSceneGraphPanel(scene, layout);
-    drawPropertiesPanel(scene, layout);
+    drawPropertiesPanel(scene, layout, drawBoundingBox);
     drawViewportPanel(viewportColorTex, layout);
     drawStatsPanel(scene, layout);
     ImGui::Render();
@@ -138,7 +145,7 @@ void EditorUI::drawSceneGraphPanel(Scene& scene, const Layout& layout) {
     ImGui::End();
 }
 
-void EditorUI::drawPropertiesPanel(Scene& scene, const Layout& layout) {
+void EditorUI::drawPropertiesPanel(Scene& scene, const Layout& layout, bool* drawBoundingBox) {
     const ImGuiViewport* mainVp = ImGui::GetMainViewport();
     const float centerH = mainVp->Size.y - layout.bottomH;
 
@@ -158,7 +165,7 @@ void EditorUI::drawPropertiesPanel(Scene& scene, const Layout& layout) {
         drawLightingSection(scene, pi);
 
     if (ImGui::CollapsingHeader("Physics"))
-        drawPhysicsSection(scene);
+        drawPhysicsSection(scene, drawBoundingBox);
 
     if (ImGui::CollapsingHeader("Environment")) {
         ImGui::ColorEdit3("Background", scene.backgroundColor);
@@ -179,6 +186,8 @@ void EditorUI::drawViewportPanel(unsigned int viewportColorTex, const Layout& la
     if (viewportColorTex != 0 && avail.x >= 1.f && avail.y >= 1.f) {
         ImGui::Image((ImTextureID)(intptr_t)viewportColorTex, avail,
                      ImVec2(0.f, 1.f), ImVec2(1.f, 0.f));
+        if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+            shootRequested_ = true;
     } else {
         ImGui::Dummy(avail);
         ImGui::TextDisabled("Viewport");
@@ -208,7 +217,7 @@ void EditorUI::drawStatsPanel(Scene& scene, const Layout& layout) {
     ImGui::Text("Point lights: %d   Spot lights: %d",
                 scene.lights.numPointLights, scene.lights.numSpotLights);
     ImGui::SameLine(0.f, 24.f);
-    ImGui::TextDisabled("WASD move | Arrows look | Up/Down forward");
+    ImGui::TextDisabled("WASD move | Arrows look | Up/Down forward | Click viewport to shoot");
 
     ImGui::End();
 }
@@ -310,7 +319,12 @@ void EditorUI::drawLightingSection(Scene& scene, float pi) {
         scene.lights.addSpotLight(SpotLight{});
 }
 
-void EditorUI::drawPhysicsSection(Scene& scene) {
+void EditorUI::drawPhysicsSection(Scene& scene, bool* drawBoundingBox) {
+    if (drawBoundingBox)
+        ImGui::Checkbox("Show Bounding Boxes", drawBoundingBox);
+
+    ImGui::Separator();
+
     if (selectedNode_ < 0 || selectedNode_ >= static_cast<int>(scene.nodes.size())) {
         ImGui::TextDisabled("Select a node in the Scene Graph.");
     } else {

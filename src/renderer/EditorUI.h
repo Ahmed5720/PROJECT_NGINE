@@ -20,20 +20,22 @@ public:
 
     void beginFrame();
     Layout computeLayout(int framebufferW, int framebufferH) const;
-    void draw(Scene& scene, unsigned int viewportColorTex, const Layout& layout);
+    void draw(Scene& scene, unsigned int viewportColorTex, const Layout& layout, bool* drawBoundingBox);
 
     int selectedNodeIndex() const { return selectedNode_; }
+    bool takeShootRequest();
 
 private:
     void drawSceneGraphPanel(Scene& scene, const Layout& layout);
-    void drawPropertiesPanel(Scene& scene, const Layout& layout);
+    void drawPropertiesPanel(Scene& scene, const Layout& layout, bool* drawBoundingBox);
     void drawViewportPanel(unsigned int viewportColorTex, const Layout& layout);
     void drawStatsPanel(Scene& scene, const Layout& layout);
 
     void drawLightingSection(Scene& scene, float pi);
     void drawCameraSection(Scene& scene, float pi);
-    void drawPhysicsSection(Scene& scene);
+    void drawPhysicsSection(Scene& scene, bool* drawBoundingBox);
     void drawSelectedNodeSection(Scene& scene);
 
     int selectedNode_ = -1;
+    bool shootRequested_ = false;
 };

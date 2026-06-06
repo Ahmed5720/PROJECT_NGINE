@@ -8,8 +8,11 @@ struct RigidBody
     vec3f worldMin = {0,0,0};
     vec3f worldMax = {1,1,1};
     vec3f velocity = {0,0,0};
+    vec3f force = {0,0,0};
+    vec3f center = {0,0,0}; // to do: ensure that center actually updates with sceneNode position
     float mass = 1.0f;
-    bool isStatic = false; // responds to collisions when enabled is true
+    float restitution = 0.5f;
+    bool isStatic = true; // responds to collisions when enabled is true
     bool useGravity = false; 
     bool isEnabled = true;
 };
@@ -25,14 +28,24 @@ struct RigidBody
 class PhysX
 {   const float Gravity = -9.8;
     const float eps = 0.01; // min collision distance
+    static constexpr int kMaxProjectiles = 32;
+    std::vector<std::pair<int, int>> collisions; // scene node index pairs
+    std::vector<int> projectileNodeIndices_;
     public:
         explicit PhysX(Scene& scene);
         ~PhysX() = default;
         void step(float dt, Scene& scene);
         void updateWorldBounds(Scene& scene);
+        void shootProjectile(Scene& scene, int meshIndex, const vec3f& origin,
+                             const vec3f& direction, float speed, float scale = 0.25f);
     private:
+        vec3f calcCollisionNormal(RigidBody& rb1, RigidBody& rb2);
+        float calcPenetrationDepth(RigidBody& rb1, RigidBody& rb2);
+        void solveCollision(Scene& scene);
+        bool collides(RigidBody& s1, RigidBody& s2);
         void resolveCollision(Scene& scene);
-        void integrate(Scene& scene);
+        void integrate(float dt, Scene& scene);
+        void removeProjectileNode(Scene& scene, int nodeIndex);
         std::vector<int> activeRbIndices;
 
 };

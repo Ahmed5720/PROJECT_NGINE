@@ -35,4 +35,5 @@ private:
     ParticleRenderer* particleRenderer_ = nullptr;
     GaussianRenderer* gaussianRenderer_ = nullptr;
     RenderPipeline* pipeline_ = nullptr;
+    int projectileMeshIndex_ = -1;
 };

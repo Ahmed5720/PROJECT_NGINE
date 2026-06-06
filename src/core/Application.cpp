@@ -21,6 +21,49 @@
 
 
 namespace {
+
+int uploadUnitCubeMesh(Scene& scene) {
+    const float h = 0.5f;
+    const vec3f positions[8] = {
+        {-h, -h, -h}, {h, -h, -h}, {h, h, -h}, {-h, h, -h},
+        {-h, -h,  h}, {h, -h,  h}, {h, h,  h}, {-h, h,  h}
+    };
+    const uint32_t faceIndices[6][6] = {
+        {0, 1, 2, 0, 2, 3},
+        {4, 6, 5, 4, 7, 6},
+        {0, 4, 5, 0, 5, 1},
+        {2, 6, 7, 2, 7, 3},
+        {0, 3, 7, 0, 7, 4},
+        {1, 5, 6, 1, 6, 2}
+    };
+    const vec3f faceNormals[6] = {
+        {0, 0, -1}, {0, 0, 1}, {0, -1, 0}, {0, 1, 0}, {-1, 0, 0}, {1, 0, 0}
+    };
+
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    vertices.reserve(36);
+    indices.reserve(36);
+
+    for (int face = 0; face < 6; ++face) {
+        for (int tri = 0; tri < 6; ++tri) {
+            const vec3f& p = positions[faceIndices[face][tri]];
+            vertices.push_back({
+                p.X, p.Y, p.Z,
+                faceNormals[face].X, faceNormals[face].Y, faceNormals[face].Z,
+                0.0f, 0.0f
+            });
+            indices.push_back(static_cast<uint32_t>(vertices.size() - 1));
+        }
+    }
+
+    MeshGPU gpuMesh;
+    gpuMesh.upload(vertices, indices);
+    const int meshIndex = static_cast<int>(scene.meshes.size());
+    scene.meshes.push_back(std::move(gpuMesh));
+    return meshIndex;
+}
+
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     void* user = glfwGetWindowUserPointer(window);
     if (user)
@@ -189,8 +232,8 @@ bool Application::init() {
     }
 
     scene_.camera.fovDeg = config_.fovDeg;
+    projectileMeshIndex_ = uploadUnitCubeMesh(scene_);
 
-    // simulator_ = new SPHSimulator();
     simulator_ = new PhysX(scene_);
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
@@ -205,10 +248,17 @@ void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
         // if (simulator_) simulator_->step();
-        simulator_->step(0.0001f, scene_);
+        simulator_->step(0.01f, scene_);
         pipeline_->render(scene_,
             config_.windowWidth, config_.windowHeight,
             config_.zNear, config_.zFar);
+
+        if (pipeline_->takeShootRequest() && simulator_ && projectileMeshIndex_ >= 0) {
+            const vec3f forward = scene_.camera.getForward();
+            simulator_->shootProjectile(scene_, projectileMeshIndex_, scene_.camera.position,
+                                        forward, 25.0f, 0.25f);
+        }
+
         glfwSwapBuffers(window_);
         glfwPollEvents();
     }

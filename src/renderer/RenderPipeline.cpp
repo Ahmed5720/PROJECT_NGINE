@@ -89,6 +89,10 @@ void RenderPipeline::destroySceneFramebuffer() {
     sceneFbH_ = 0;
 }
 
+bool RenderPipeline::takeShootRequest() {
+    return editorUI_.takeShootRequest();
+}
+
 void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
                             float zNear, float zFar) {
     const EditorUI::Layout layout = editorUI_.computeLayout(framebufferW, framebufferH);
@@ -116,7 +120,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
     glClear(GL_COLOR_BUFFER_BIT);
 
     editorUI_.beginFrame();
-    editorUI_.draw(scene, sceneColorTex_, layout);
+    editorUI_.draw(scene, sceneColorTex_, layout, &drawBoundingBox);
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
