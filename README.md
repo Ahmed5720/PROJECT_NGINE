@@ -30,6 +30,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 
 For a Diagram of the Architecture:
 https://link.excalidraw.com/l/4sFYiHS90EW/AyscVUlVxQg
+![Alt text](media/Project%20Ngine.png)
 
 The engine is structured as:
 

@@ -28,12 +28,6 @@ void PhysX::step(float dt, Scene& scene)
     resolveCollision(scene);
     solveCollision(scene);
     updateWorldBounds(scene);
-    for (int i = 0; i < 10; ++i)
-    {
-        updateWorldBounds(scene);
-        resolveCollision(scene);
-        solveCollision(scene);
-    }
 }
 
 
