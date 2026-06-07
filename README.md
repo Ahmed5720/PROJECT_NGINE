@@ -13,7 +13,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - phong shading with diffuse and specular texture mapping.
 - ligting (Directional, Point, and Spot Lights)
 - UI system
-- PhysX a work in progress
+- PhysX a work in progress.
  
 ![Alt text](media/bronco2.png)
 ![Alt text](media/viewport2.jpg)
