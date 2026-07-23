@@ -18,7 +18,7 @@
 #include <iostream>
 #include <vector> 
 #include "OBJ_Loader.h"
-
+#include <thread>
 
 namespace {
 
@@ -84,7 +84,6 @@ Application::~Application() {
         return;
     }
     if (pipeline_) delete pipeline_;
-    if (gaussianRenderer_) delete gaussianRenderer_;
     if (particleRenderer_) delete particleRenderer_;
     if (simulator_) delete simulator_;
     if (phongShader_) {
@@ -149,6 +148,7 @@ bool Application::init() {
 
     phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
     wireFrameShader_ = new shader(config_.wireVsPath.c_str(), config_.wireFsPath.c_str());
+    skyBoxShader_ = new shader(config_.skyboxVsPath.c_str(), config_.skyboxFsPath.c_str());
 
     // Load OBJ: each OBJ sub-mesh becomes one SceneNode with its own
     // Material.  The MeshGPU (GPU buffers) lives in scene_.meshes and
@@ -206,7 +206,7 @@ bool Application::init() {
             //float ksAvg = (mesh.MeshMaterial.Ks.X + mesh.MeshMaterial.Ks.Y + mesh.MeshMaterial.Ks.Z) / 3.0f;
             //mat.specularStrength = (ksAvg > 0.0f) ? ksAvg : 0.5f;
  
-            // Diffuse texture (map_Kd) — paths from broncoScene.mtl, files in src/textures/
+            // Diffuse texture (map_Kd)
             if (!mesh.MeshMaterial.map_Kd.empty()) {
                 std::string resolved;
                 mat.diffuseMap = TextureLoader::loadMapKd(
@@ -231,13 +231,25 @@ bool Application::init() {
     std::cerr << "[Application] Failed to load OBJ: " << config_.objPath << "\n";
     }
 
+    // load cubemap textures
+    vector<std::string> faces
+    {
+        "right.jpg",
+        "left.jpg",
+        "top.jpg",
+        "bottom.jpg",
+        "front.jpg",
+        "back.jpg"
+    };
+    unsigned int cubeMapTexture = TextureLoader::loadCubemap(config_.texturePath, faces);
+    scene_.cubeMapTexture = cubeMapTexture;
     scene_.camera.fovDeg = config_.fovDeg;
     projectileMeshIndex_ = uploadUnitCubeMesh(scene_);
 
     simulator_ = new PhysX(scene_);
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
-    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_);
+    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_, skyBoxShader_);
 
     glfwSwapInterval(1);
     initialized_ = true;
@@ -247,12 +259,12 @@ bool Application::init() {
 void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
-        // if (simulator_) simulator_->step();
-        simulator_->step(0.01f, scene_);
-        pipeline_->render(scene_,
-            config_.windowWidth, config_.windowHeight,
-            config_.zNear, config_.zFar);
-
+        pipeline_->render(scene_,config_.windowWidth, config_.windowHeight, config_.zNear, config_.zFar);
+        // TO DO measure timing to see if this is any useful..
+        std::thread physics_t(&PhysX::step, simulator_, 0.01, std::ref(scene_));
+        physics_t.join();
+        simulator_->updateTransforms(scene_);
+            
         if (pipeline_->takeShootRequest() && simulator_ && projectileMeshIndex_ >= 0) {
             const vec3f forward = scene_.camera.getForward();
             simulator_->shootProjectile(scene_, projectileMeshIndex_, scene_.camera.position,

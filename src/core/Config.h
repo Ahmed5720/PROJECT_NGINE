@@ -34,6 +34,8 @@ struct Config {
     std::string particleFsPath;
     std::string gaussianVsPath;
     std::string gaussianFsPath;
+    std::string skyboxVsPath;
+    std::string skyboxFsPath;
     std::string sphComputePath;
 
     void resolvePaths() {
@@ -52,11 +54,11 @@ struct Config {
         wireFsPath     = slash(shaderDir, "wireFrame.fs");
         particleVsPath = slash(shaderDir, "particle.vs");
         particleFsPath = slash(shaderDir, "particle.fs");
-        gaussianVsPath = slash(shaderDir, "gaussian.vs");
-        gaussianFsPath = slash(shaderDir, "gaussian.fs");
+        skyboxVsPath   = slash(shaderDir, "skybox.vs");
+        skyboxFsPath   = slash(shaderDir, "skybox.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "desk.obj");
+        objPath        = slash(objPath, "wine.obj");
         texturePath    = slash(basePath, "textures");
     }
 };

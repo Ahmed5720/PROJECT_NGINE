@@ -8,6 +8,7 @@ struct RigidBody
     vec3f worldMin = {0,0,0};
     vec3f worldMax = {1,1,1};
     vec3f velocity = {0,0,0};
+    vec3f position;
     vec3f force = {0,0,0};
     vec3f center = {0,0,0}; // to do: ensure that center actually updates with sceneNode position
     float mass = 1.0f;
@@ -36,6 +37,7 @@ class PhysX
         ~PhysX() = default;
         void step(float dt, Scene& scene);
         void updateWorldBounds(Scene& scene);
+        void updateTransforms(Scene& scene);
         void shootProjectile(Scene& scene, int meshIndex, const vec3f& origin,
                              const vec3f& direction, float speed, float scale = 0.25f);
     private:

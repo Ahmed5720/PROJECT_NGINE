@@ -62,8 +62,7 @@ struct Scene {
     std::vector<RigidBody> rbs;
 
     LightEnvironment lights;
-
-    //std::vector<Gaussian> gaussians;
+    unsigned int cubeMapTexture;
     SceneNode& addNode(const std::string& name, int meshIndex, Material&& mat)
     {
         SceneNode node;

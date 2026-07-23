@@ -42,7 +42,7 @@ struct Material {
     float diffuseColor[3]  = {1.0f, 1.0f, 1.0f};
     TextureHandle diffuseMap;          // optional
     TextureHandle specularMap;
-    float shininess        = 32.0f;    // Phong exponent
+    float shininess = 32.0f;    // Phong exponent
  
     std::string name;
 

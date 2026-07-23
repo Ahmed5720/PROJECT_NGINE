@@ -10,6 +10,7 @@ constexpr float kRestVelocityThreshold  = 0.5f;
 constexpr float kVelocitySleepThreshold = 0.003f;
 constexpr float kPositionSlop           = 0.001f;
 constexpr float kLinearDamping          = 0.5f;
+constexpr float groundLevel = 0.0;
 }
 
 PhysX::PhysX(Scene& scene)
@@ -27,7 +28,6 @@ void PhysX::step(float dt, Scene& scene)
     updateWorldBounds(scene);
     resolveCollision(scene);
     solveCollision(scene);
-    updateWorldBounds(scene);
 }
 
 
@@ -65,7 +65,7 @@ void PhysX::updateWorldBounds(Scene& scene)
         scene.rbs[s.rbIndex].center = {s.position[0], s.position[1], s.position[2]};
     }
 }
-
+// collects all scene collisions
 void PhysX::resolveCollision(Scene& scene)
 {
     collisions.clear();
@@ -126,48 +126,32 @@ void PhysX::solveCollision(Scene& scene)
 
         vec3f normal = calcCollisionNormal(rb1, rb2);
         // Normal points rb1 -> rb2; use v2 - v1 so approaching contacts have vn < 0
-        // position correction: always apply, regardless of velocity
-        const float percent = 0.6f;
-        const float slop    = 0.001f;
-        float depth = calcPenetrationDepth(rb1, rb2);
-        printf("depth: %f normal: %f %f %f\n", depth, normal.x, normal.y, normal.z);
-        if (depth > slop)
-        {
-            vec3f correction = normal * (depth - slop) * percent;
-            float totalInvMass = (rb1.isStatic ? 0 : 1.0f / rb1.mass)
-                               + (rb2.isStatic ? 0 : 1.0f / rb2.mass);
-            if (totalInvMass > 0)
-            {
-                if (!rb1.isStatic) {
-                    node1.position[0] -= correction.X * (1.0f / rb1.mass) / totalInvMass;
-                    node1.position[1] -= correction.Y * (1.0f / rb1.mass) / totalInvMass;
-                    node1.position[2] -= correction.Z * (1.0f / rb1.mass) / totalInvMass;
-                }
-                if (!rb2.isStatic) {
-                    node2.position[0] += correction.X * (1.0f / rb2.mass) / totalInvMass;
-                    node2.position[1] += correction.Y * (1.0f / rb2.mass) / totalInvMass;
-                    node2.position[2] += correction.Z * (1.0f / rb2.mass) / totalInvMass;
-                }
-            }
-        }
-
+        
         // impulse: only apply if objects are approaching
         vec3f relativeVelocity = rb2.velocity - rb1.velocity;
         float velocityAlongNormal = vector_dot(relativeVelocity, normal);
-        if (velocityAlongNormal >= 0) continue;
 
-        float totalInvMass = (rb1.isStatic ? 0 : 1.0f / rb1.mass)
-                           + (rb2.isStatic ? 0 : 1.0f / rb2.mass);
-        if (totalInvMass <= 0) continue;
+        // already seperating so we can skip
+        if (velocityAlongNormal > 0.0f) continue;
 
+        // project velocities on the collision normal
+        float v1 = vector_dot(rb1.velocity, normal);
+        float v2 = vector_dot(rb2.velocity, normal);
+
+
+        float totalMass = (rb1.mass + rb2.mass);
         float restitut = 0.5f * (rb1.restitution + rb2.restitution);
-        float j = -(1.0f + restitut) * velocityAlongNormal / totalInvMass;
-        vec3f impulse = normal * j;
 
-        if (!rb1.isStatic) rb1.velocity = rb1.velocity - impulse / rb1.mass;
-        if (!rb2.isStatic) rb2.velocity = rb2.velocity + impulse / rb2.mass;
+        float Nominator1 = ((rb1.mass - restitut * rb2.mass) * v1) + ((restitut+1.0) * rb2.mass * v2);
+        float Nominator2 = ((rb2.mass - restitut * rb1.mass) * v2) + ((restitut+1.0) * rb1.mass * v1);
+        float vf1 = Nominator1 / totalMass;
+        float vf2 = Nominator2 / totalMass;
+        
+        // back to 3d
+        if (!rb1.isStatic) rb1.velocity += (vf1 - v1) * normal;
+        if (!rb2.isStatic) rb2.velocity += (vf2 - v2) * normal;
+
     }
-    updateWorldBounds(scene);
     collisions.clear();
 }
 
@@ -314,7 +298,7 @@ void PhysX::integrate(float dt, Scene& scene)
         if (rb.isStatic || !rb.isEnabled)
             continue;
 
-        if (rb.useGravity)
+        if (rb.useGravity && rb.position.y > groundLevel)
             rb.velocity.Y += Gravity * dt;
 
         const float damping = 1.0f / (1.0f + kLinearDamping * dt);
@@ -322,9 +306,9 @@ void PhysX::integrate(float dt, Scene& scene)
         rb.velocity.Y *= damping;
         rb.velocity.Z *= damping;
 
-        s.position[0] += rb.velocity.X * dt;
-        s.position[1] += rb.velocity.Y * dt;
-        s.position[2] += rb.velocity.Z * dt;
+        rb.position.x += rb.velocity.X * dt;
+        rb.position.y += rb.velocity.Y * dt;
+        rb.position.z += rb.velocity.Z * dt;
 
         const float speedSq = rb.velocity.X * rb.velocity.X
                             + rb.velocity.Y * rb.velocity.Y
@@ -332,5 +316,18 @@ void PhysX::integrate(float dt, Scene& scene)
         if (speedSq < kVelocitySleepThreshold * kVelocitySleepThreshold)
             rb.velocity = {0.0f, 0.0f, 0.0f};
 
+    }
+}
+
+void PhysX::updateTransforms(Scene& scene)
+{
+    for (SceneNode& s : scene.nodes) {
+        if (s.rbIndex < 0 || s.rbIndex >= static_cast<int>(scene.rbs.size()))
+            continue;
+
+        RigidBody& rb = scene.rbs[s.rbIndex];
+        if (rb.isStatic || !rb.isEnabled)
+            continue;
+        std::copy(&rb.position.x, &rb.position.x + 3, s.position);
     }
 }

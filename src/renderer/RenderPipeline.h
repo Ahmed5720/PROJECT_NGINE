@@ -11,7 +11,7 @@
 class RenderPipeline {
 public:
     bool drawBoundingBox = false;
-    RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer);
+    RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer, shader* skyBoxShader);
     ~RenderPipeline();
 
     void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
@@ -20,6 +20,7 @@ public:
 private:
     void renderPhongPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection);
+    void renderSkyBoxPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void uploadLighting(shader& s, const LightEnvironment& lights);
     void resizeSceneFramebuffer(int w, int h);
     void destroySceneFramebuffer();
@@ -27,6 +28,7 @@ private:
     WireFrameMesh wireFrameMesh_;
     shader* wireFrameShader_ = nullptr;
     shader* phongShader_ = nullptr;
+    shader* skyBoxShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     EditorUI editorUI_;
 

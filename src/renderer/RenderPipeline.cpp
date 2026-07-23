@@ -31,8 +31,8 @@ void checkGLError(const char* ctx) {
 }
 } // namespace
 
-RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer)
-    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) {
+RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader)
+    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) {
     wireFrameMesh_.init();
 }
 
@@ -109,9 +109,10 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const float aspect = static_cast<float>(layout.sceneW) / static_cast<float>(layout.sceneH);
         const mat4x4 view = scene.camera.getViewMatrix();
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
+        renderSkyBoxPass(scene, view, projection);
         renderPhongPass(scene, view, projection);
         renderWireframePass(scene, view, projection);
-
+        
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
@@ -222,11 +223,15 @@ void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat
         // Diffuse map
         glActiveTexture(GL_TEXTURE0);
         if (node.material.diffuseMap.valid())
+        {
             glBindTexture(GL_TEXTURE_2D, node.material.diffuseMap.id);
+            phongShader_->setBool("hasTexture", GL_TRUE);
+        }
         else
         {
             //std::cout << "invalid material, using white texture instead\n";
-            glBindTexture(GL_TEXTURE_2D, getWhiteTex());
+            phongShader_->setBool("hasTexture", GL_FALSE);
+            phongShader_->setFloat3("material.diffuseColor", node.material.diffuseColor[0], node.material.diffuseColor[1], node.material.diffuseColor[2]);
         }
 
         // Specular map
@@ -272,9 +277,91 @@ void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const
     glLineWidth(1.0f);
     checkGLError("renderLinePass");
 }
-// getWhiteTex
-//   Lazy-initialises a 1×1 white RGBA texture used as a fallback when a
-//   node has no diffuse or specular map. 
+
+void RenderPipeline::renderSkyBoxPass(Scene& scene, const mat4x4& view, const mat4x4& projection)
+{   
+    static GLuint skyboxVAO = 0;
+    static GLuint skyboxVBO = 0;
+
+    if(skyboxVAO == 0)
+    {
+        glGenVertexArrays(1, &skyboxVAO);
+        glGenBuffers(1, &skyboxVBO);
+        float skyboxVertices[] = {
+        // positions          
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+
+        -1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f, -1.0f,
+        1.0f,  1.0f,  1.0f,
+        1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f, -1.0f,
+        1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+        1.0f, -1.0f,  1.0f
+    };
+        glBindVertexArray(skyboxVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
+        
+        // Position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        
+        // Unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    
+    // Remove translation from view matrix
+    mat4x4 viewNoTranslation = view;
+    viewNoTranslation.m[3][0] = 0;
+    viewNoTranslation.m[3][1] = 0;
+    viewNoTranslation.m[3][2] = 0;
+
+    glDepthMask(GL_FALSE);
+    glDepthFunc(GL_LEQUAL);
+    skyBoxShader_->use();
+    setMat4(*skyBoxShader_, "view", viewNoTranslation);
+    setMat4(*skyBoxShader_, "projection", projection);
+    glBindVertexArray(skyboxVAO);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glBindVertexArray(0);
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+}
 GLuint RenderPipeline::getWhiteTex() {
     if (whiteTex_ != 0) return whiteTex_;
     unsigned char white[4] = {255, 255, 255, 255};
