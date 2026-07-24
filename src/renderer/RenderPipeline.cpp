@@ -8,6 +8,7 @@
 namespace {
 const float PI = 3.14159265f;
 
+// why the hell is this here and not in shader.h?
 void setMat4(shader& s, const char* name, const mat4x4& M) {
     float m[16] = {
         M.m[0][0], M.m[0][1], M.m[0][2], M.m[0][3],
@@ -29,10 +30,59 @@ void checkGLError(const char* ctx) {
     if (err != GL_NO_ERROR)
         std::cerr << "GL error in " << ctx << ": 0x" << std::hex << err << std::dec << "\n";
 }
+
+
+// --- TEMP DEBUG: depth texture on a quad
+void debugDrawDepthTex(GLuint tex) {
+    static GLuint vao = 0, vbo = 0, prog = 0;
+    if (prog == 0) {
+        const char* vs = R"(#version 430 core
+            layout(location=0) in vec2 aPos;
+            out vec2 uv;
+            void main() { uv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); })";
+        const char* fs = R"(#version 430 core
+            in vec2 uv; out vec4 FragColor;
+            uniform sampler2D depthTex;
+            void main() {
+                float d = texture(depthTex, uv).r;
+                FragColor = vec4(vec3(d), 1.0);
+            })";
+        GLuint v = glCreateShader(GL_VERTEX_SHADER);
+        glShaderSource(v, 1, &vs, nullptr); glCompileShader(v);
+        GLuint f = glCreateShader(GL_FRAGMENT_SHADER);
+        glShaderSource(f, 1, &fs, nullptr); glCompileShader(f);
+        prog = glCreateProgram();
+        glAttachShader(prog, v); glAttachShader(prog, f); glLinkProgram(prog);
+        GLint ok = 0; glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+        if (!ok) { char log[512]; glGetProgramInfoLog(prog, 512, nullptr, log);
+                   std::cerr << "debug quad link failed: " << log << "\n"; }
+        glDeleteShader(v); glDeleteShader(f);
+
+        const float quad[] = { -1,-1,  1,-1,  -1,1,  1,1 };
+        glGenVertexArrays(1, &vao); glGenBuffers(1, &vbo);
+        glBindVertexArray(vao);
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindVertexArray(0);
+    }
+    glDisable(GL_DEPTH_TEST);
+    glUseProgram(prog);
+    glActiveTexture(GL_TEXTURE0);            // your lighting pass leaves this on unit 2
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glUniform1i(glGetUniformLocation(prog, "depthTex"), 0);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+    glEnable(GL_DEPTH_TEST);
+}
+
+
 } // namespace
 
-RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader)
-    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) {
+RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow)
+    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) {
     wireFrameMesh_.init();
 }
 
@@ -49,27 +99,42 @@ void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
     destroySceneFramebuffer();
     sceneFbW_ = w;
     sceneFbH_ = h;
-
+    std::cout << "AA\n";
     glGenFramebuffers(1, &sceneFbo_);
     glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
-
     glGenTextures(1, &sceneColorTex_);
     glBindTexture(GL_TEXTURE_2D, sceneColorTex_);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneColorTex_, 0);
-
+    std::cout << "BB\n";
     glGenRenderbuffers(1, &sceneDepthRbo_);
     glBindRenderbuffer(GL_RENDERBUFFER, sceneDepthRbo_);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRbo_);
-
+    std::cout << "CC\n";
+    glGenFramebuffers(1, &depthMapFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFbo_);
+    glGenTextures(1, &depthMap);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+    std::cout << "DD\n";
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
     const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "[RenderPipeline] Scene framebuffer incomplete: 0x" << std::hex << status << std::dec << "\n";
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    std::cout << "EE\n";
 }
 
 void RenderPipeline::destroySceneFramebuffer() {
@@ -85,6 +150,11 @@ void RenderPipeline::destroySceneFramebuffer() {
         glDeleteFramebuffers(1, &sceneFbo_);
         sceneFbo_ = 0;
     }
+    if(depthMap)
+        glDeleteTextures(1,&depthMap);
+
+    if(depthMapFbo_)
+        glDeleteFramebuffers(1,&depthMapFbo_);
     sceneFbW_ = 0;
     sceneFbH_ = 0;
 }
@@ -99,20 +169,33 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
 
     if (layout.sceneW >= 8 && layout.sceneH >= 8) {
         resizeSceneFramebuffer(layout.sceneW, layout.sceneH);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
-        glViewport(0, 0, layout.sceneW, layout.sceneH);
-        glEnable(GL_DEPTH_TEST);
-        glClearColor(scene.backgroundColor[0], scene.backgroundColor[1], scene.backgroundColor[2], 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         const float aspect = static_cast<float>(layout.sceneW) / static_cast<float>(layout.sceneH);
+
+        // shadows assume single directional light source, same method would work for spotlights
+        // (except that we would use a prespective projection instead of ortho, however doing this for every light seems very expensive there are probably better ways)
+        
+        const vec3f center = {0.0,0.0,0.0};
+        const vec3f lightDir = vector_normalize(vec3f(scene.lights.sun.direction));
+        const vec3f up = {0.0, 1.0, 0.0};
+        const vec3f lightPos = lightDir * -100.0f; // why does that work
         const mat4x4 view = scene.camera.getViewMatrix();
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
+        const mat4x4 lightProjection = matrix_ortho(-0.5f, 0.5f, -0.5f, 0.5f, 95, 110);
+        const mat4x4 lightView = matrix_quickInvert(matrix_pointAt(lightPos,  center, up));
+        const mat4x4 lightSpace =  matrix_matmul(lightView, lightProjection);
+        glEnable(GL_DEPTH_TEST);
+        glClearColor(scene.backgroundColor[0], scene.backgroundColor[1], scene.backgroundColor[2], 1.0f);
+        glBindFramebuffer(GL_FRAMEBUFFER, depthMapFbo_);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+        renderShadowPass(scene, lightView, lightProjection);
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
+        glViewport(0, 0, layout.sceneW, layout.sceneH);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderSkyBoxPass(scene, view, projection);
-        renderPhongPass(scene, view, projection);
+        renderLightingPass(scene, view, projection, lightSpace);
         renderWireframePass(scene, view, projection);
-        
+        //debugDrawDepthTex(depthMap); 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
@@ -184,28 +267,66 @@ void RenderPipeline::uploadLighting(shader& s, const LightEnvironment& lights) {
     s.setInt("numSpotLights", activeSpots);
 }
 
-// renderPhongPass
+
+void RenderPipeline::renderShadowPass(Scene& scene, const mat4x4& light, const mat4x4& projection)
+{
+    shadowShader_->use();
+
+    int drawn = 0;
+    // Per-frame: matrices
+    setMat4(*shadowShader_, "light", light);
+    setMat4(*shadowShader_, "projection", projection);
+
+    GLint prog = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    std::cout << "light=" << glGetUniformLocation(prog, "light")
+              << " proj=" << glGetUniformLocation(prog, "projection")
+              << " model=" << glGetUniformLocation(prog, "model") << "\n";
+    // Per-node draw
+    for (const SceneNode& node : scene.nodes) {
+        if (!node.visible) continue;
+        if (!node.castsShadow) continue;
+        if (node.meshIndex == -1) continue;
+        if (node.meshIndex >= static_cast<int>(scene.meshes.size())) continue;
+
+        // Model matrix
+        mat4x4 model = node.modelMatrix();
+        setMat4(*shadowShader_, "model", model);
+        
+        // might incorrectly check for textures?
+        scene.meshes[node.meshIndex].draw();
+        ++drawn;
+
+    }
+    std::cout << "shadow draws: " << drawn << "\n";
+
+    checkGLError("renderShadowDepthPass");
+}
+// renderLightingPass
 //   1. Upload per-frame uniforms: matrices, camera, all lights.
 //   2. For each visible SceneNode: upload model matrix + material, draw.
 
 //   We bind the diffuse map to unit 0, specular map to unit 1.
 //   If a map is missing we bind a 1×1 white fallback (see getWhiteTex).
-void RenderPipeline::renderPhongPass(Scene& scene, const mat4x4& view, const mat4x4& projection) {
+void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const mat4x4& projection, const mat4x4& lightSpace) {
+    
+
     phongShader_->use();
 
     // Per-frame: matrices
     setMat4(*phongShader_, "view",       view);
     setMat4(*phongShader_, "projection", projection);
-
+    setMat4(*phongShader_, "lightSpace", lightSpace);
     // Per-frame: camera position
     phongShader_->setFloat3("viewPos", scene.camera.position.x, scene.camera.position.y, scene.camera.position.z);
-
     // Per-frame: all lights
     uploadLighting(*phongShader_, scene.lights);
 
     // Bind sampler uniforms to their fixed texture units (set once per frame)
     phongShader_->setInt("material.diffuse",  0);   // GL_TEXTURE0
     phongShader_->setInt("material.specular", 1);   // GL_TEXTURE1
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, depthMap);
+    phongShader_->setInt("shadowMap", 2); 
 
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {

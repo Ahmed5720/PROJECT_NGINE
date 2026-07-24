@@ -53,6 +53,12 @@ struct vec3f
         Y = _Y;
         Z = _Z;
     }
+    vec3f(float* xyz)
+    {
+        X = xyz[0];
+        Y = xyz[1];
+        Z = xyz[2];
+    }
     vec3f(float _X, float _Y, float _Z, float _w)
     {
         X = _X;
@@ -113,7 +119,7 @@ inline vec3f operator+(const vec3f v1, const vec3f& v2) {
     return {v1.X + v2.X, v1.Y + v2.Y, v1.Z + v2.Z};
 }
 inline vec3f operator-(const vec3f v1, const vec3f& v2) {
-    return {v1.X - v2.X, v1.Y - v2.Y, v1.Z - v1.Z};
+    return {v1.X - v2.X, v1.Y - v2.Y, v1.Z - v2.Z};
 }
 inline vec3f& operator*=(vec3f& v1, const vec3f& v2) {
     v1.X *= v2.X; v1.Y *= v2.Y; v1.Z *= v2.Z;
@@ -215,6 +221,23 @@ inline mat4x4 matrix_makeProjection(float fovDeg, float aspect, float ZNear, flo
     m.m[3][2] = (2 * ZFar * ZNear) / (ZNear - ZFar); m.m[3][3] = 0.0f;
     return m;
 }
+
+inline mat4x4 matrix_ortho(float left, float right, float bottom, float top, float zNear, float zFar) {
+    mat4x4 result;
+
+    // Diagonal scaling terms
+    result.m[0][0]  = 2.0f / (right - left);
+    result.m[1][1]  = 2.0f / (top - bottom);
+    result.m[2][2] = 2.0f / (zFar - zNear);
+    result.m[3][3] = 1.0f;
+
+    // Translation terms (column 3)
+    result.m[3][0] = -(right + left) / (right - left);
+    result.m[3][1] = -(top + bottom) / (top - bottom);
+    result.m[3][2] = -(zFar + zNear) / (zFar - zNear);
+
+    return result;
+}
 inline mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f& up) {
     vec3f forward = vector_sub(target, pos);
     forward = vector_normalize(forward);
@@ -228,17 +251,17 @@ inline mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f&
     vec3f right = vector_cross(newUp, forward);
     mat4x4 matrix;
     matrix.m[0][0] = right.X;
-    matrix.m[1][0] = up.X;
+    matrix.m[1][0] = newUp.X;
     matrix.m[2][0] = forward.X;
     matrix.m[3][0] = pos.X;
 
     matrix.m[0][1] = right.Y;
-    matrix.m[1][1] = up.Y;
+    matrix.m[1][1] = newUp.Y;
     matrix.m[2][1] = forward.Y;
     matrix.m[3][1] = pos.Y;
 
     matrix.m[0][2] = right.Z;
-    matrix.m[1][2] = up.Z;
+    matrix.m[1][2] = newUp.Z;
     matrix.m[2][2] = forward.Z;
     matrix.m[3][2] = pos.Z;
 

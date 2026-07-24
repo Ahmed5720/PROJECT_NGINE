@@ -37,6 +37,8 @@ struct Config {
     std::string skyboxVsPath;
     std::string skyboxFsPath;
     std::string sphComputePath;
+    std::string shadowVsPath;
+    std::string shadowFsPath;
 
     void resolvePaths() {
         if (basePath.empty())
@@ -56,6 +58,8 @@ struct Config {
         particleFsPath = slash(shaderDir, "particle.fs");
         skyboxVsPath   = slash(shaderDir, "skybox.vs");
         skyboxFsPath   = slash(shaderDir, "skybox.fs");
+        shadowVsPath   = slash(shaderDir, "shadow.vs");
+        shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
         objPath        = slash(objPath, "wine.obj");

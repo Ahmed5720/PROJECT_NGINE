@@ -149,7 +149,7 @@ bool Application::init() {
     phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
     wireFrameShader_ = new shader(config_.wireVsPath.c_str(), config_.wireFsPath.c_str());
     skyBoxShader_ = new shader(config_.skyboxVsPath.c_str(), config_.skyboxFsPath.c_str());
-
+    shadowShader_ = new shader(config_.shadowVsPath.c_str(), config_.shadowFsPath.c_str());
     // Load OBJ: each OBJ sub-mesh becomes one SceneNode with its own
     // Material.  The MeshGPU (GPU buffers) lives in scene_.meshes and
     // is referenced by index from the node.
@@ -249,7 +249,7 @@ bool Application::init() {
     simulator_ = new PhysX(scene_);
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
-    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_, skyBoxShader_);
+    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_, skyBoxShader_, shadowShader_);
 
     glfwSwapInterval(1);
     initialized_ = true;

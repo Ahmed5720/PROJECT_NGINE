@@ -33,6 +33,7 @@ private:
     shader* phongShader_ = nullptr;
     shader* wireFrameShader_ = nullptr;
     shader* skyBoxShader_ = nullptr;
+    shader* shadowShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     GaussianRenderer* gaussianRenderer_ = nullptr;
     RenderPipeline* pipeline_ = nullptr;

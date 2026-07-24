@@ -103,6 +103,8 @@ class shader
 
     }
 
+    
+
     void setMat4(const std::string &name, const float* m) const
     {
         glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, m);
