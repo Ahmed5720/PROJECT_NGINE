@@ -41,14 +41,19 @@ struct Material {
     //  Phong 
     float diffuseColor[3]  = {1.0f, 1.0f, 1.0f};
     TextureHandle diffuseMap;          // optional
+    TextureHandle normalMap;
+    TextureHandle roughnessMap;
+    TextureHandle aoMap;
     TextureHandle specularMap;
-    float shininess = 32.0f;    // Phong exponent
- 
+    float shininess = 32.0f;    // Phong exponent deprecated
+
+    float roughness = 0.5f;
+    float metallic = 0;
     std::string name;
 
     Material()                           = default;
     Material(const Material&)            = delete;
-    Material& operator=(const Material&) = delete;
+   // Material& operator=(const Material&) = delete;
     Material(Material&&)                 = default;
     Material& operator=(Material&&)      = default;
 };

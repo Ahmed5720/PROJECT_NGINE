@@ -2,6 +2,7 @@
 #include "Camera.h"
 #include "geometry.h"
 #include <vector>
+#include <memory>
 #include "Material.h"
 #include "LightEnvironment.h"
 #include "physX.h"
@@ -39,7 +40,7 @@ struct SceneNode
     
     
     // material
-    Material material;
+    std::shared_ptr<Material> material;
     //flags
     bool visible = true;
     bool castsShadow = true;
@@ -60,15 +61,15 @@ struct Scene {
     std::vector<SceneNode> nodes;
     std::vector<MeshGPU> meshes;
     std::vector<RigidBody> rbs;
-
+    std::vector<std::shared_ptr<Material>> mats; // we would like for multiple objects to be able to share the same material without copying and at the same time each object containing its material instead of just an index to it
     LightEnvironment lights;
     unsigned int cubeMapTexture;
-    SceneNode& addNode(const std::string& name, int meshIndex, Material&& mat)
+    SceneNode& addNode(const std::string& name, int meshIndex, int matIndex)
     {
         SceneNode node;
         node.name = name;
         node.meshIndex = meshIndex;
-        node.material = std::move(mat);
+        node.material = mats[matIndex];
         nodes.push_back(std::move(node));
         return nodes.back();
     }

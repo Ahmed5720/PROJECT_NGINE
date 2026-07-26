@@ -81,8 +81,8 @@ void debugDrawDepthTex(GLuint tex) {
 
 } // namespace
 
-RenderPipeline::RenderPipeline(shader* phongShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow)
-    : phongShader_(phongShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) {
+RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow)
+    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) {
     wireFrameMesh_.init();
 }
 
@@ -177,10 +177,12 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const vec3f center = {0.0,0.0,0.0};
         const vec3f lightDir = vector_normalize(vec3f(scene.lights.sun.direction));
         const vec3f up = {0.0, 1.0, 0.0};
-        const vec3f lightPos = lightDir * -100.0f; // why does that work
+        const vec3f lightPos = lightDir * -10.0f; // why does that work
         const mat4x4 view = scene.camera.getViewMatrix();
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
-        const mat4x4 lightProjection = matrix_ortho(-0.5f, 0.5f, -0.5f, 0.5f, 95, 110);
+        // the choice of the ortho bounds and near and far clipping planes seem to be very delicate
+        // near and far should depend on where the light source is, the cube should sorround the entire scene
+        const mat4x4 lightProjection = matrix_ortho(-5.0f, 5.0f, -5.0f, 5.0f, 0, 30);
         const mat4x4 lightView = matrix_quickInvert(matrix_pointAt(lightPos,  center, up));
         const mat4x4 lightSpace =  matrix_matmul(lightView, lightProjection);
         glEnable(GL_DEPTH_TEST);
@@ -188,14 +190,16 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFbo_);
         glClear(GL_DEPTH_BUFFER_BIT);
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
+        glCullFace(GL_FRONT);
         renderShadowPass(scene, lightView, lightProjection);
+        glCullFace(GL_BACK);
         glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
         glViewport(0, 0, layout.sceneW, layout.sceneH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderSkyBoxPass(scene, view, projection);
         renderLightingPass(scene, view, projection, lightSpace);
         renderWireframePass(scene, view, projection);
-        //debugDrawDepthTex(depthMap); 
+       // debugDrawDepthTex(depthMap); 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
@@ -221,50 +225,50 @@ void RenderPipeline::uploadLighting(shader& s, const LightEnvironment& lights) {
     // bound its loop so unset array slots are never read.
     char buf[64];
     int activePoints = 0;
-    for (int i = 0; i < lights.numPointLights; ++i) {
-        const PointLight& pl = lights.pointLights[i];
-        if (!pl.enabled) continue;
+    // for (int i = 0; i < lights.numPointLights; ++i) {
+    //     const PointLight& pl = lights.pointLights[i];
+    //     if (!pl.enabled) continue;
 
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "position");
-        s.setFloat3(buf, pl.position[0], pl.position[1], pl.position[2]);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "position");
+    //     s.setFloat3(buf, pl.position[0], pl.position[1], pl.position[2]);
 
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "constant");
-        s.setFloat(buf, pl.constant);
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "linear");
-        s.setFloat(buf, pl.linear);
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "quadratic");
-        s.setFloat(buf, pl.quadratic);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "constant");
+    //     s.setFloat(buf, pl.constant);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "linear");
+    //     s.setFloat(buf, pl.linear);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "quadratic");
+    //     s.setFloat(buf, pl.quadratic);
 
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "ambient");
-        s.setFloat3(buf, pl.ambient[0],  pl.ambient[1],  pl.ambient[2]);
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "diffuse");
-        s.setFloat3(buf, pl.diffuse[0],  pl.diffuse[1],  pl.diffuse[2]);
-        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "specular");
-        s.setFloat3(buf, pl.specular[0], pl.specular[1], pl.specular[2]);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "ambient");
+    //     s.setFloat3(buf, pl.ambient[0],  pl.ambient[1],  pl.ambient[2]);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "diffuse");
+    //     s.setFloat3(buf, pl.diffuse[0],  pl.diffuse[1],  pl.diffuse[2]);
+    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "specular");
+    //     s.setFloat3(buf, pl.specular[0], pl.specular[1], pl.specular[2]);
 
-        ++activePoints;
-    }
-    s.setInt("numPointLights", activePoints);
-    // Spot light — shader uses a single `spotLight` uniform (first enabled only)
-    int activeSpots = 0;
-    for (int i = 0; i < lights.numSpotLights && activeSpots < 1; ++i) {
-        const SpotLight& sl = lights.spotLights[i];
-        if (!sl.enabled) continue;
+    //     ++activePoints;
+    // }
+    // s.setInt("numPointLights", activePoints);
+    // // Spot light — shader uses a single `spotLight` uniform (first enabled only)
+    // int activeSpots = 0;
+    // for (int i = 0; i < lights.numSpotLights && activeSpots < 1; ++i) {
+    //     const SpotLight& sl = lights.spotLights[i];
+    //     if (!sl.enabled) continue;
 
-        s.setFloat3("spotLight.position",  sl.position[0],  sl.position[1],  sl.position[2]);
-        s.setFloat3("spotLight.direction", sl.direction[0], sl.direction[1], sl.direction[2]);
-        s.setFloat("spotLight.cutOff",      sl.cutOff);
-        s.setFloat("spotLight.outerCutOff", sl.outerCutOff);
-        s.setFloat("spotLight.constant",   sl.constant);
-        s.setFloat("spotLight.linear",     sl.linear);
-        s.setFloat("spotLight.quadratic",  sl.quadratic);
-        s.setFloat3("spotLight.ambient",  sl.ambient[0],  sl.ambient[1],  sl.ambient[2]);
-        s.setFloat3("spotLight.diffuse",  sl.diffuse[0],  sl.diffuse[1],  sl.diffuse[2]);
-        s.setFloat3("spotLight.specular", sl.specular[0], sl.specular[1], sl.specular[2]);
+    //     s.setFloat3("spotLight.position",  sl.position[0],  sl.position[1],  sl.position[2]);
+    //     s.setFloat3("spotLight.direction", sl.direction[0], sl.direction[1], sl.direction[2]);
+    //     s.setFloat("spotLight.cutOff",      sl.cutOff);
+    //     s.setFloat("spotLight.outerCutOff", sl.outerCutOff);
+    //     s.setFloat("spotLight.constant",   sl.constant);
+    //     s.setFloat("spotLight.linear",     sl.linear);
+    //     s.setFloat("spotLight.quadratic",  sl.quadratic);
+    //     s.setFloat3("spotLight.ambient",  sl.ambient[0],  sl.ambient[1],  sl.ambient[2]);
+    //     s.setFloat3("spotLight.diffuse",  sl.diffuse[0],  sl.diffuse[1],  sl.diffuse[2]);
+    //     s.setFloat3("spotLight.specular", sl.specular[0], sl.specular[1], sl.specular[2]);
 
-        activeSpots = 1;
-    }
-    s.setInt("numSpotLights", activeSpots);
+    //     activeSpots = 1;
+    // }
+    //s.setInt("numSpotLights", activeSpots);
 }
 
 
@@ -310,23 +314,23 @@ void RenderPipeline::renderShadowPass(Scene& scene, const mat4x4& light, const m
 void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const mat4x4& projection, const mat4x4& lightSpace) {
     
 
-    phongShader_->use();
+    pbrShader_->use();
 
     // Per-frame: matrices
-    setMat4(*phongShader_, "view",       view);
-    setMat4(*phongShader_, "projection", projection);
-    setMat4(*phongShader_, "lightSpace", lightSpace);
+    setMat4(*pbrShader_, "view",       view);
+    setMat4(*pbrShader_, "projection", projection);
+    setMat4(*pbrShader_, "lightSpace", lightSpace);
     // Per-frame: camera position
-    phongShader_->setFloat3("viewPos", scene.camera.position.x, scene.camera.position.y, scene.camera.position.z);
+    pbrShader_->setFloat3("viewPos", scene.camera.position.x, scene.camera.position.y, scene.camera.position.z);
     // Per-frame: all lights
-    uploadLighting(*phongShader_, scene.lights);
+    uploadLighting(*pbrShader_, scene.lights);
 
     // Bind sampler uniforms to their fixed texture units (set once per frame)
-    phongShader_->setInt("material.diffuse",  0);   // GL_TEXTURE0
-    phongShader_->setInt("material.specular", 1);   // GL_TEXTURE1
+    pbrShader_->setInt("material.diffuse",  0);   // GL_TEXTURE0
+    pbrShader_->setInt("material.specular", 1);   // GL_TEXTURE1
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, depthMap);
-    phongShader_->setInt("shadowMap", 2); 
+    pbrShader_->setInt("shadowMap", 2); 
 
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
@@ -336,39 +340,39 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
 
         // Model matrix
         mat4x4 model = node.modelMatrix();
-        setMat4(*phongShader_, "model", model);
+        setMat4(*pbrShader_, "model", model);
 
-        // material.shininess
-        phongShader_->setFloat("material.shininess", node.material.shininess);
 
+        pbrShader_->setFloat("material.roughness", node.material->roughness);
+        pbrShader_->setFloat("material.metallic", node.material->metallic);
+        pbrShader_->setFloat3("material.diffuseColor", node.material->diffuseColor);
         // Diffuse map
         glActiveTexture(GL_TEXTURE0);
-        if (node.material.diffuseMap.valid())
+        if (node.material->diffuseMap.valid())
         {
-            glBindTexture(GL_TEXTURE_2D, node.material.diffuseMap.id);
-            phongShader_->setBool("hasTexture", GL_TRUE);
+            glBindTexture(GL_TEXTURE_2D, node.material->diffuseMap.id);
+            pbrShader_->setBool("hasTexture", GL_TRUE);
         }
         else
         {
             //std::cout << "invalid material, using white texture instead\n";
-            phongShader_->setBool("hasTexture", GL_FALSE);
-            phongShader_->setFloat3("material.diffuseColor", node.material.diffuseColor[0], node.material.diffuseColor[1], node.material.diffuseColor[2]);
+            pbrShader_->setBool("hasTexture", GL_FALSE);
         }
 
         // Specular map
         // If no dedicated specular map, reuse the diffuse map
         glActiveTexture(GL_TEXTURE1);
-        if (node.material.specularMap.valid())
-            glBindTexture(GL_TEXTURE_2D, node.material.specularMap.id);
-        else if (node.material.diffuseMap.valid())
-            glBindTexture(GL_TEXTURE_2D, node.material.diffuseMap.id);
+        if (node.material->specularMap.valid())
+            glBindTexture(GL_TEXTURE_2D, node.material->specularMap.id);
+        else if (node.material->diffuseMap.valid())
+            glBindTexture(GL_TEXTURE_2D, node.material->diffuseMap.id);
         else
             glBindTexture(GL_TEXTURE_2D, getWhiteTex());
 
         scene.meshes[node.meshIndex].draw();
     }
 
-    checkGLError("renderPhongPass");
+    checkGLError("renderPBRpass");
 }
 void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection)
 {

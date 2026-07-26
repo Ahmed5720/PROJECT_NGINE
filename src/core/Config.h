@@ -39,6 +39,8 @@ struct Config {
     std::string sphComputePath;
     std::string shadowVsPath;
     std::string shadowFsPath;
+    std::string pbrVsPath;
+    std::string pbrFsPath;
 
     void resolvePaths() {
         if (basePath.empty())
@@ -52,6 +54,8 @@ struct Config {
         shaderDir      = slash(basePath, "shaders");
         phongVsPath    = slash(shaderDir, "shader.vs");
         phongFsPath    = slash(shaderDir, "shader.fs");
+        pbrVsPath    = slash(shaderDir, "pbr.vs");
+        pbrFsPath    = slash(shaderDir, "pbr.fs");
         wireVsPath     = slash(shaderDir, "wireFrame.vs");
         wireFsPath     = slash(shaderDir, "wireFrame.fs");
         particleVsPath = slash(shaderDir, "particle.vs");
@@ -62,7 +66,7 @@ struct Config {
         shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "wine.obj");
+        objPath        = slash(objPath, "bronco3.obj");
         texturePath    = slash(basePath, "textures");
     }
 };

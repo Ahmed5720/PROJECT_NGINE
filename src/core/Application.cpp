@@ -19,6 +19,7 @@
 #include <vector> 
 #include "OBJ_Loader.h"
 #include <thread>
+#include <memory>
 
 namespace {
 
@@ -90,6 +91,10 @@ Application::~Application() {
         phongShader_->deleteProgram();
         delete phongShader_;
     }
+    if (pbrShader_) {
+        pbrShader_->deleteProgram();
+        delete pbrShader_;
+    }
     if (wireFrameShader_)
     {
         wireFrameShader_->deleteProgram();
@@ -146,7 +151,8 @@ bool Application::init() {
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 430");
 
-    phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
+    //phongShader_ = new shader(config_.phongVsPath.c_str(), config_.phongFsPath.c_str());
+    pbrShader_ = new shader(config_.pbrVsPath.c_str(), config_.pbrFsPath.c_str());
     wireFrameShader_ = new shader(config_.wireVsPath.c_str(), config_.wireFsPath.c_str());
     skyBoxShader_ = new shader(config_.skyboxVsPath.c_str(), config_.skyboxFsPath.c_str());
     shadowShader_ = new shader(config_.shadowVsPath.c_str(), config_.shadowFsPath.c_str());
@@ -190,40 +196,42 @@ bool Application::init() {
             rb.localMin = min;
             rb.localMax = max;
             scene_.rbs.push_back(rb);
- 
+            
             // Build Material from the MTL entry 
-            Material mat;
-            mat.name = mesh.MeshMaterial.name;
-            mat.type = Material::Type::Phong;
+            auto mat = std::make_shared<Material>();
+            mat->name = mesh.MeshMaterial.name;
+            mat->type = Material::Type::Phong;
  
             // Diffuse colour from MTL Kd (default white if not set)
-            mat.diffuseColor[0] = mesh.MeshMaterial.Kd.X;
-            mat.diffuseColor[1] = mesh.MeshMaterial.Kd.Y;
-            mat.diffuseColor[2] = mesh.MeshMaterial.Kd.Z;
+            mat->diffuseColor[0] = mesh.MeshMaterial.Kd.X;
+            mat->diffuseColor[1] = mesh.MeshMaterial.Kd.Y;
+            mat->diffuseColor[2] = mesh.MeshMaterial.Kd.Z;
  
             // Specular / shininess from MTL Ns and Ks magnitude
-            mat.shininess = (mesh.MeshMaterial.Ns > 0.0f) ? mesh.MeshMaterial.Ns : 32.0f;
+            mat->shininess = (mesh.MeshMaterial.Ns > 0.0f) ? mesh.MeshMaterial.Ns : 32.0f;
             //float ksAvg = (mesh.MeshMaterial.Ks.X + mesh.MeshMaterial.Ks.Y + mesh.MeshMaterial.Ks.Z) / 3.0f;
             //mat.specularStrength = (ksAvg > 0.0f) ? ksAvg : 0.5f;
  
             // Diffuse texture (map_Kd)
             if (!mesh.MeshMaterial.map_Kd.empty()) {
                 std::string resolved;
-                mat.diffuseMap = TextureLoader::loadMapKd(
+                mat->diffuseMap = TextureLoader::loadMapKd(
                     config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Kd, &resolved);
-                mat.specularMap = TextureLoader::loadMapKd(
+                mat->specularMap = TextureLoader::loadMapKd(
                     config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Ks, &resolved);
             }
- 
+            
+            scene_.mats.push_back(mat);
+            int matIdx = scene_.mats.size()-1;
             // Create SceneNode 
-            SceneNode& node = scene_.addNode(mesh.MeshName, meshIndex, std::move(mat));
+            SceneNode& node = scene_.addNode(mesh.MeshName, meshIndex, matIdx);
             node.rbIndex = rbIndex;
 
             std::cout << "[Application] Loaded mesh '" << node.name << "'"
                       << "  verts="   << mesh.Vertices.size()
                       << "  indices=" << mesh.Indices.size()
-                      << "  material='" << node.material.name << "'"
-                      << "  texture=" << (node.material.diffuseMap.valid() ? "yes" : "no")
+                      << "  material='" << node.material->name << "'"
+                      << "  texture=" << (node.material->diffuseMap.valid() ? "yes" : "no")
                       << "\n";
         }
     }
@@ -249,7 +257,7 @@ bool Application::init() {
     simulator_ = new PhysX(scene_);
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
-    pipeline_ = new RenderPipeline(phongShader_, wireFrameShader_, particleRenderer_, skyBoxShader_, shadowShader_);
+    pipeline_ = new RenderPipeline(pbrShader_, wireFrameShader_, particleRenderer_, skyBoxShader_, shadowShader_);
 
     glfwSwapInterval(1);
     initialized_ = true;

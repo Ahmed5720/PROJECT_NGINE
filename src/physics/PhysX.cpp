@@ -276,7 +276,7 @@ void PhysX::shootProjectile(Scene& scene, int meshIndex, const vec3f& origin,
     mat.shininess = 64.0f;
 
     SceneNode& node = scene.addNode(
-        "Projectile_" + std::to_string(projectileCounter++), meshIndex, std::move(mat));
+        "Projectile_" + std::to_string(projectileCounter++), meshIndex, 0);
     node.rbIndex = rbIndex;
     node.position[0] = spawnPos.X;
     node.position[1] = spawnPos.Y;

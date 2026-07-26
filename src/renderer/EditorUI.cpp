@@ -234,10 +234,12 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
     ImGui::DragFloat3("Rotation", node.rotation, 1.f, -180.f, 180.f);
     ImGui::DragFloat3("Scale", node.scale, 0.01f, 0.01f, 100.f);
     ImGui::Separator();
-    ImGui::Text("Material: %s", node.material.name.c_str());
-    ImGui::DragFloat("Shininess", &node.material.shininess, 1.f, 1.f, 256.f);
-    ImGui::Text("Diffuse:  %s", node.material.diffuseMap.valid() ? "loaded" : "fallback");
-    ImGui::Text("Specular: %s", node.material.specularMap.valid() ? "loaded" : "fallback");
+    ImGui::Text("Material: %s", node.material->name.c_str());
+    ImGui::ColorEdit3("Diffuse", node.material->diffuseColor);
+    ImGui::DragFloat("roughness", &node.material->roughness, 0.1f, 0.0f, 1.0f);
+    ImGui::DragFloat("metallic", &node.material->metallic, 0.1f, 0.0f, 1.0f);
+    ImGui::Text("Diffuse:  %s", node.material->diffuseMap.valid() ? "loaded" : "fallback");
+    ImGui::Text("Specular: %s", node.material->specularMap.valid() ? "loaded" : "fallback");
 
     ImGui::Separator();
     ImGui::Text("Rigid Body");

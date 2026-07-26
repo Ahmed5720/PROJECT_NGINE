@@ -11,7 +11,7 @@
 class RenderPipeline {
 public:
     bool drawBoundingBox = false;
-    RenderPipeline(shader* phongShader, shader* wireframeShader, ParticleRenderer* particleRenderer,
+    RenderPipeline(shader* pbrShader, shader* wireframeShader, ParticleRenderer* particleRenderer,
     shader* skyBoxShader, shader* shadowShader);
     ~RenderPipeline();
 
@@ -32,6 +32,7 @@ private:
     shader* phongShader_ = nullptr;
     shader* skyBoxShader_ = nullptr;
     shader* shadowShader_ = nullptr;
+    shader* pbrShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     EditorUI editorUI_;
 

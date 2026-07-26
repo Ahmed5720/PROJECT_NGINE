@@ -31,6 +31,7 @@ private:
     Scene scene_;
     PhysX* simulator_ = nullptr;
     shader* phongShader_ = nullptr;
+    shader* pbrShader_ = nullptr;
     shader* wireFrameShader_ = nullptr;
     shader* skyBoxShader_ = nullptr;
     shader* shadowShader_ = nullptr;

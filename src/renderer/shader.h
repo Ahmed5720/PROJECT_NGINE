@@ -102,6 +102,16 @@ class shader
   
 
     }
+    void setFloat3(const std::string &name, const float* f) const
+    { 
+
+        GLint loc = glGetUniformLocation(ID, name.c_str());
+        if (loc == -1)
+            std::cout << "Warning: Uniform '" << name << "' not found!" << std::endl;
+        glUniform3f(loc, f[0], f[1], f[2]); 
+
+    }
+
 
     
 
