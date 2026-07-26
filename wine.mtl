@@ -1,6 +1,17 @@
 # Blender 4.4.3 MTL File: 'wine.blend'
 # www.blender.org
 
+newmtl Brick_Wall
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Kd brick-35_diffuse.jpg
+map_Ks brick-35_roughness.jpg
+map_Ns brick-35_normal.jpg
+
 newmtl Capraia_porcelain
 Ns 1000.000000
 Ka 1.000000 1.000000 1.000000
@@ -9,8 +20,9 @@ Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
-illum 2
 map_Kd Porcelanato Capraia_34353_BaseColor.jpg
+map_Ks Porcelain_roughness.jpg
+illum 2
 
 newmtl Glass.002
 Ns 1000.000000
@@ -35,7 +47,7 @@ illum 3
 newmtl candle
 Ns 360.000000
 Ka 1.000000 1.000000 1.000000
-Kd 0.900000 0.600000 0.300000
+Kd 0.800000 0.800000 0.800000
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.000000
@@ -45,7 +57,7 @@ illum 2
 newmtl flame
 Ns 360.000000
 Ka 1.000000 1.000000 1.000000
-Kd 0.900000 0.300000 0.300000
+Kd 0.800000 0.800000 0.800000
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
 Ni 1.000000
@@ -62,7 +74,7 @@ Ni 1.000000
 d 1.000000
 illum 2
 
-newmtl rubber
+newmtl 材质.001
 Ns 640.000000
 Ka 1.000000 1.000000 1.000000
 Kd 0.000000 0.000000 0.000000

@@ -4,7 +4,6 @@
 #include "Scene.h"
 #include "RenderPipeline.h"
 #include "EditorUI.h"
-//#include "OBJLoader.h"
 #include "ply_loader.h"
 #include "ParticleRenderer.h"
 #include "3DGS_renderer.h"
@@ -15,14 +14,76 @@
 #include "imgui/imgui_impl_opengl3.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include "OBJ_Loader.h"
 #include <iostream>
 #include <vector> 
-#include "OBJ_Loader.h"
 #include <thread>
 #include <memory>
 
 namespace {
+// TO DO put this somewhere else, we need a utils prollly
+// computes tangentSpace needed for correct normal orientation
+std::vector<TangentSpace> computeTangentSpace(const std::vector<objl::Vertex>& vertices, const std::vector<unsigned int>& indices)
+{
+     std::vector<TangentSpace> tangentSpace(vertices.size());
+    // Initialize tangents and bitangents
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        tangentSpace[i].tangent = {0.0f, 0.0f, 0.0f};
+        tangentSpace[i].bitangent = {0.0f, 0.0f, 0.0f};
+    }
+    
+    // Process each triangle
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        // Get the three vertices of the triangle
+        const objl::Vertex& v0 = vertices[indices[i]];
+        const objl::Vertex& v1 = vertices[indices[i + 1]];
+        const objl::Vertex& v2 = vertices[indices[i + 2]];
+        
+        // Edge vectors
+        vec3f edge1 = {
+            v1.Position.X - v0.Position.X,
+            v1.Position.Y - v0.Position.Y,
+            v1.Position.Z - v0.Position.Z
+        };
+        vec3f edge2 = {
+            v2.Position.X - v0.Position.X,
+            v2.Position.Y - v0.Position.Y,
+            v2.Position.Z - v0.Position.Z
+        };
+        
+        // Texture coordinate deltas
+        float deltaU1 = v1.TextureCoordinate.X - v0.TextureCoordinate.X;
+        float deltaV1 = v1.TextureCoordinate.Y - v0.TextureCoordinate.Y;
+        float deltaU2 = v2.TextureCoordinate.X - v0.TextureCoordinate.X;
+        float deltaV2 = v2.TextureCoordinate.Y - v0.TextureCoordinate.Y;
+        
+        // Compute tangent and bitangent
+        float f = 1.0f / (deltaU1 * deltaV2 - deltaU2 * deltaV1);
+        
+        vec3f tangent = {
+            f * (deltaV2 * edge1.x - deltaV1 * edge2.x),
+            f * (deltaV2 * edge1.y - deltaV1 * edge2.y),
+            f * (deltaV2 * edge1.z - deltaV1 * edge2.z)
+        };
+        
+        vec3f bitangent = {
+            f * (-deltaU2 * edge1.x + deltaU1 * edge2.x),
+            f * (-deltaU2 * edge1.y + deltaU1 * edge2.y),
+            f * (-deltaU2 * edge1.z + deltaU1 * edge2.z)
+        };
+        
+        // Add to all three vertices of the triangle
+        tangentSpace[indices[i]].tangent = tangentSpace[indices[i]].tangent + tangent;
+        tangentSpace[indices[i + 1]].tangent = tangentSpace[indices[i + 1]].tangent + tangent;
+        tangentSpace[indices[i + 2]].tangent = tangentSpace[indices[i + 2]].tangent + tangent;
+        
+        tangentSpace[indices[i]].bitangent = tangentSpace[indices[i]].bitangent + bitangent;
+        tangentSpace[indices[i + 1]].bitangent = tangentSpace[indices[i + 1]].bitangent + bitangent;
+        tangentSpace[indices[i + 2]].bitangent = tangentSpace[indices[i + 2]].bitangent + bitangent;
 
+    }
+    return tangentSpace;
+}
 int uploadUnitCubeMesh(Scene& scene) {
     const float h = 0.5f;
     const vec3f positions[8] = {
@@ -168,16 +229,27 @@ bool Application::init() {
             vec3f min = {U, U, U};
             vec3f max = {D, D, D};
 
+            // Compute tangent space for all vertices
+            std::vector<TangentSpace> tangentSpace = computeTangentSpace(mesh.Vertices, mesh.Indices);
+
             // Build vertex buffer
             std::vector<Vertex> vertices;
             vertices.reserve(mesh.Vertices.size());
+            int i = 0;
             for (const objl::Vertex& v : mesh.Vertices) {
                 vertices.push_back({
                     v.Position.X,  v.Position.Y,  v.Position.Z,
                     v.Normal.X,    v.Normal.Y,    v.Normal.Z,
                     v.TextureCoordinate.X,
-                    1.0f - v.TextureCoordinate.Y   // flip V (OBJ origin is bottom-left)
+                    1.0f - v.TextureCoordinate.Y,   // flip V (OBJ origin is bottom-left)
+                    tangentSpace[i].tangent.x,
+                    tangentSpace[i].tangent.y,
+                    tangentSpace[i].tangent.z,
+                    tangentSpace[i].bitangent.x,
+                    tangentSpace[i].bitangent.y,
+                    tangentSpace[i].bitangent.z
                 });
+                i++;
                 min.X = std::min(min.X, v.Position.X);
                 min.Y = std::min(min.Y, v.Position.Y);
                 min.Z = std::min(min.Z, v.Position.Z);
@@ -217,8 +289,10 @@ bool Application::init() {
                 std::string resolved;
                 mat->diffuseMap = TextureLoader::loadMapKd(
                     config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Kd, &resolved);
-                mat->specularMap = TextureLoader::loadMapKd(
+                mat->roughnessMap = TextureLoader::loadMapKd(
                     config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Ks, &resolved);
+                mat->normalMap = TextureLoader::loadMapKd(
+                    config_.objPath, config_.texturePath, mesh.MeshMaterial.map_Ns, &resolved);
             }
             
             scene_.mats.push_back(mat);

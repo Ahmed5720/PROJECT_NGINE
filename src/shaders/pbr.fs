@@ -40,25 +40,34 @@ struct Material
     sampler2D diffuseMap;
     sampler2D normalMap;
     sampler2D roughnessMap;
+    sampler2D metallicMap;
     sampler2D aoMap;
     vec3 diffuseColor;
     float metallic;
     float roughness;
+    float alpha;
+    bool emissive;
 };
 
 #define N_MAX_POINT_LIGHTS 16
 #define N_MAX_SPOT_LIGHTS 16
 
 
-in vec2 TexCoords;
+in vec2 uv;
 in vec3 Normal;
+in vec3 vTangent;
+in vec3 vBitangent;
 in vec3 FragPos;
 in vec4 FragPosLightSpace;
 out vec4 FragColor;
 
 uniform int numSpotLights;
 uniform int numPointLights;
-uniform bool hasTexture;
+uniform bool hasDiffuseTex;
+uniform bool hasRoughnessTex;
+uniform bool hasNormalTex;
+uniform bool hasAoTex;
+uniform bool hasMetallicTex;
 uniform vec3 viewPos;
 uniform sampler2D shadowMap;
 uniform DirLight dirLight;
@@ -71,25 +80,48 @@ float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
 vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, vec3 Lo, float roughness, float metallic, float shadow);
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
-vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 float calcShadow(vec4 FragPosLightSpace, vec3 l, vec3 normal);
 
-void main()
-{
-    // Normalize inputs
-    vec3 normal = normalize(Normal);
-    vec3 viewDir = normalize(viewPos - FragPos);
+// TBD
+vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 
-   vec3 d = normalize(-dirLight.direction);
+void main()
+{   
+    if(material.emissive)
+    {
+        FragColor = vec4(material.diffuseColor, 1.0);
+        return;
+    }
+
+    // Normalize inputs
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 d = normalize(-dirLight.direction);
    // no maps for now, F0, diffuse, normal, roughness 
     // if !hasTexture
-    float roughness = material.roughness;
-    vec3 diffuse = material.diffuseColor;
-    float metallic = material.metallic;
-    float ao = 1.0;
+    vec3 diffuse = hasDiffuseTex ? vec3(texture(material.diffuseMap, uv)) : material.diffuseColor;
+    float roughness = hasRoughnessTex ? texture(material.roughnessMap, uv).r : material.roughness;
+    float metallic = hasMetallicTex ? texture(material.metallicMap, uv).r : material.metallic;
+    float ao = hasAoTex ? texture(material.aoMap, uv).r : 1.0;
+    vec3 normal = normalize(Normal);
+    if(hasNormalTex)
+    {
+        vec3 tangentNormal = normalize(texture(material.normalMap, uv).rgb * 2.0 - 1.0);
+
+        vec3 N = normal;
+        vec3 T = normalize(vTangent);
+        vec3 B = normalize(vBitangent);
+        mat3 TBN = mat3(T, B, N);
+        // now normal is transformed to world space
+        //normal = normalize(TBN * tangentNormal); 
+        normal = normalize(tangentNormal);
+    }
+   
+        
+
     //else ..
     float shadow = calcShadow(FragPosLightSpace, d, normal);
+    //float shadow = 0; 
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, material.diffuseColor, metallic);
     // out reflectance
@@ -107,7 +139,7 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2)); // gamma correction
 
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(color, material.alpha);
 }
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
@@ -188,7 +220,7 @@ float calcShadow(vec4 fragPosLightSpace, vec3 l, vec3 normal)
     float currentDepth = projCoords.z;
     // check whether current frag pos is in shadow
     // float bias = 0.0005;
-    float bias = max(0.005 * (1.0 - dot(normal, l)), 0.0005);  
+    float bias = max(0.0005 * (1.0 - dot(normal, l)), 0.0005);  
     float shadow = 0.0;
     vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
     for(int x = -1; x <= 1; ++x)

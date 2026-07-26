@@ -236,8 +236,10 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
     ImGui::Separator();
     ImGui::Text("Material: %s", node.material->name.c_str());
     ImGui::ColorEdit3("Diffuse", node.material->diffuseColor);
-    ImGui::DragFloat("roughness", &node.material->roughness, 0.1f, 0.0f, 1.0f);
-    ImGui::DragFloat("metallic", &node.material->metallic, 0.1f, 0.0f, 1.0f);
+    ImGui::DragFloat("roughness", &node.material->roughness, 0.01f, 0.0f, 1.0f);
+    ImGui::DragFloat("metallic", &node.material->metallic, 0.01f, 0.0f, 1.0f);
+    ImGui::DragFloat("alpha", &node.material->alpha, 0.01f, 0.0f, 1.0f);
+    ImGui::Checkbox("isEmissive", &node.material->emissive);
     ImGui::Text("Diffuse:  %s", node.material->diffuseMap.valid() ? "loaded" : "fallback");
     ImGui::Text("Specular: %s", node.material->specularMap.valid() ? "loaded" : "fallback");
 

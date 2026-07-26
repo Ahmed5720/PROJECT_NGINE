@@ -2,26 +2,38 @@
 
 # PROJECT NGINE
 
-The long term aspiration of this project is to become a small 3D engine that supports features I consider interesting Like importing models, rasterization, basic mesh editing, Rigid body physics, particle simulation, rasterization and perhaps eventually raytracing. Performance is particularly an aspect I care about, so when opportunity permits, we would like to make use of efficient data structures (anything but an array) As one might expect from the lack of structure of this project, the intention is not to produce a functionining product but purely to satisfy my curiosity.
+The long term aspiration of this project is to become a small 3D engine that supports features I consider interesting Like importing models, rasterization, basic mesh editing, Rigid body physics, particle simulation, rasterization and perhaps eventually raytracing. Performance is particularly an aspect I care about, so when opportunity permits, we would like to make use of efficient data structures. As one might expect from the lack of structure of this project, the intention is not to produce a functionining product but purely to satisfy my curiosity.
+
 
 ## Features so far
 
 - A small ad-hoc matrix/vector library that performs all nessicary matrix/vector math.  
 - OBJ model loading
 - Scene hiararchy: different objects represented as nodes (sharing materials)
-- rasterization pipeline: 
-- phong shading with diffuse and specular texture mapping.
-- ligting (Directional, Point, and Spot Lights)
-- UI system
-- PhysX a work in progress.
+- SkyBox rendering (cubemapping) 
+- PBR with Texture Mapping (Diffuse, Roughness, Metallic, Normal, AO)
+- Emissive & Transparent Materials WIP
+- Rienhard tonemapping + Gamma correction
+- Shadow Mapping
+- lighting (Directional, Point, and Spot Lights) WIP
+- UI system 
+- rigid body physics (on Seperate thread) WIP.
+- wireframe rendering of RigidBody Bounding Boxes
  
+![Alt text](media/bronco4.png)
+![Alt text](media/wine2.png)
 ![Alt text](media/bronco2.png)
-![Alt text](media/viewport2.jpg)
 
 
 ## TBD
-- PhysX (a system to support rigid body physics and particle simulations)
-- Shadows
+- Extending Physx to be actually useful
+- Fix multiple shadow problems
+- Fix incorrect tangent/bitangent calc
+- Extend PBR and shadows to support Point & Spot Lights (currently only works on directional)
+- Environment Based Lighting
+- Scene description through a Json and a parser or even USD?
+- Foilage rendering with Geometry shader
+- Light probes?
 - multiple rendering passes (deferred rendering)
   
 

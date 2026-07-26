@@ -44,11 +44,15 @@ struct Material {
     TextureHandle normalMap;
     TextureHandle roughnessMap;
     TextureHandle aoMap;
-    TextureHandle specularMap;
+    TextureHandle metallicMap;
+
+    TextureHandle specularMap;  // tbh i should remove this shit, too much work to be able to switch between the two models
     float shininess = 32.0f;    // Phong exponent deprecated
 
     float roughness = 0.5f;
     float metallic = 0;
+    float alpha = 1.0;
+    bool emissive = false;
     std::string name;
 
     Material()                           = default;

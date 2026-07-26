@@ -26,9 +26,8 @@ struct Vertex {
     float px, py, pz;
     float nx, ny, nz;
     float u,v;
-    // Vector3 Position;
-    // Vector3 Normal;
-    // Vector2 TextureCoordinate;
+    float tx, ty, tz; // tangent and bitangent
+    float bx, by, bz;
 };
 struct triangle
 {   
@@ -54,10 +53,15 @@ struct triangle
         p[2] = Vector3(x3,y3,z3);
     }
 };
+struct TangentSpace
+{
+    vec3f tangent;
+    vec3f bitangent;
+};
 struct mesh
 {
 	vector<triangle> tris;
-
+    // no longer in use?
 	bool LoadFromObjectFile(string sFilename)
 	{
 		ifstream f(sFilename);
@@ -163,6 +167,14 @@ struct MeshGPU
        glEnableVertexAttribArray(2);
        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (6 * sizeof(float)));
 
+       //tangent
+       glEnableVertexAttribArray(3);
+       glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (8 * sizeof(float)));
+
+       //bitangent
+       glEnableVertexAttribArray(4);
+       glVertexAttribPointer(4, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*) (11 * sizeof(float)));
+
        glBindVertexArray(0);
        
     }
@@ -188,12 +200,11 @@ struct MeshGPU
     }
 
 };
-
 struct WireFrameMesh
 {
     GLuint vao = 0, vbo = 0, ebo = 0;
 
-    // Call once at startup — uploads the static edge index buffer.
+    // uploads the static edge index buffer.
     // The VBO is left as dynamic storage; corners are streamed each draw.
     void init()
     {
@@ -254,7 +265,9 @@ struct WireFrameMesh
         if (vao) { glDeleteVertexArrays(1, &vao); vao = 0; }
     }
 };
-// the asstute observer should note that Gaussians are not actual geometry.
+
+
+//the asstute observer should note that Gaussians are not actual geometry.
 struct Gaussian{
     Vector3 pos;  // world space
     vec4f rot;  //  rot_0 to rot_3 -> x,y,z,w (quaternion)
@@ -270,3 +283,4 @@ struct GaussianGPU {
     vec4f scale;             // xyz = log scale, w = unused
     vec4f sh[3];              // SH coeffs per channel (R, G, B)
 };
+

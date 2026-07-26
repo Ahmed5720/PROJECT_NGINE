@@ -66,7 +66,7 @@ struct Config {
         shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "bronco3.obj");
+        objPath        = slash(objPath, "wine.obj");
         texturePath    = slash(basePath, "textures");
     }
 };

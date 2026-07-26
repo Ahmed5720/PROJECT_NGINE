@@ -182,7 +182,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
         // the choice of the ortho bounds and near and far clipping planes seem to be very delicate
         // near and far should depend on where the light source is, the cube should sorround the entire scene
-        const mat4x4 lightProjection = matrix_ortho(-5.0f, 5.0f, -5.0f, 5.0f, 0, 30);
+        const mat4x4 lightProjection = matrix_ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0, 30);
         const mat4x4 lightView = matrix_quickInvert(matrix_pointAt(lightPos,  center, up));
         const mat4x4 lightSpace =  matrix_matmul(lightView, lightProjection);
         glEnable(GL_DEPTH_TEST);
@@ -197,7 +197,10 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         glViewport(0, 0, layout.sceneW, layout.sceneH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderSkyBoxPass(scene, view, projection);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         renderLightingPass(scene, view, projection, lightSpace);
+        glDisable(GL_BLEND);
         renderWireframePass(scene, view, projection);
        // debugDrawDepthTex(depthMap); 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -326,11 +329,15 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
     uploadLighting(*pbrShader_, scene.lights);
 
     // Bind sampler uniforms to their fixed texture units (set once per frame)
-    pbrShader_->setInt("material.diffuse",  0);   // GL_TEXTURE0
-    pbrShader_->setInt("material.specular", 1);   // GL_TEXTURE1
-    glActiveTexture(GL_TEXTURE2);
+    pbrShader_->setInt("material.diffuseMap",  0);   // GL_TEXTURE0
+    pbrShader_->setInt("material.roughnessMap", 1);   // GL_TEXTURE1
+    pbrShader_->setInt("material.normalMap",2);
+    pbrShader_->setInt("material.metallicMap", 3);
+    pbrShader_->setInt("material.aoMap", 4);
+    pbrShader_->setInt("shadowMap", 5); 
+    
+    glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, depthMap);
-    pbrShader_->setInt("shadowMap", 2); 
 
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
@@ -345,29 +352,70 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
 
         pbrShader_->setFloat("material.roughness", node.material->roughness);
         pbrShader_->setFloat("material.metallic", node.material->metallic);
+        pbrShader_->setFloat("material.alpha", node.material->alpha);
         pbrShader_->setFloat3("material.diffuseColor", node.material->diffuseColor);
+        pbrShader_->setBool("material.emissive", node.material->emissive);
         // Diffuse map
-        glActiveTexture(GL_TEXTURE0);
         if (node.material->diffuseMap.valid())
         {
+            pbrShader_->setBool("hasDiffuseTex", GL_TRUE);
+            glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, node.material->diffuseMap.id);
-            pbrShader_->setBool("hasTexture", GL_TRUE);
+            std::cout << "Found Diffuse\n";
         }
         else
         {
-            //std::cout << "invalid material, using white texture instead\n";
-            pbrShader_->setBool("hasTexture", GL_FALSE);
+            pbrShader_->setBool("hasDiffuseTex", GL_FALSE);
+            std::cout << "NO Diffuse!\n";
         }
-
-        // Specular map
-        // If no dedicated specular map, reuse the diffuse map
-        glActiveTexture(GL_TEXTURE1);
-        if (node.material->specularMap.valid())
-            glBindTexture(GL_TEXTURE_2D, node.material->specularMap.id);
-        else if (node.material->diffuseMap.valid())
-            glBindTexture(GL_TEXTURE_2D, node.material->diffuseMap.id);
+        if(node.material->roughnessMap.valid())
+        {
+            pbrShader_->setBool("hasRoughnessTex", GL_TRUE);
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, node.material->roughnessMap.id);
+            std::cout << "Found Rougness\n";
+        }
         else
-            glBindTexture(GL_TEXTURE_2D, getWhiteTex());
+        {
+            pbrShader_->setBool("hasRoughnessTex", GL_FALSE);
+            std::cout << "No Roughness\n";
+        }
+        if(node.material->normalMap.valid())
+        {   
+            pbrShader_->setBool("hasNormalTex", GL_TRUE);
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, node.material->normalMap.id);
+            std::cout << "Found Normal\n";
+        }
+        else
+        {
+            pbrShader_->setBool("hasNormalTex", GL_FALSE);
+            std::cout << "no Normal!!\n";
+        }
+        if(node.material->metallicMap.valid())
+        {   
+            pbrShader_->setBool("hasMetallicTex", GL_TRUE);
+            glActiveTexture(GL_TEXTURE3);
+            glBindTexture(GL_TEXTURE_2D, node.material->metallicMap.id);
+            std::cout << "Found Mettallic\n";
+        }
+        else
+        {
+            pbrShader_->setBool("hasMetallicTex", GL_FALSE);
+            std::cout << "No Metallic!!\n";
+        }
+        if(node.material->aoMap.valid())
+        {   
+            pbrShader_->setBool("hasAoTex", GL_TRUE);
+            glActiveTexture(GL_TEXTURE4);
+            glBindTexture(GL_TEXTURE_2D, node.material->aoMap.id);
+            std::cout << "Found ao\n";
+        }
+        else
+        {
+            pbrShader_->setBool("hasAoTex", GL_FALSE);
+            std::cout << "No AO!!!\n";
+        }
 
         scene.meshes[node.meshIndex].draw();
     }
