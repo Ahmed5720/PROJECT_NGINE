@@ -1,6 +1,6 @@
 #version 430 core
 
-
+// we no longer make use of ambient and specular components of lights in the PBR pipeline. is that standard?
 struct DirLight
 {
     vec3 direction;
@@ -70,6 +70,7 @@ uniform bool hasAoTex;
 uniform bool hasMetallicTex;
 uniform vec3 viewPos;
 uniform sampler2D shadowMap;
+uniform samplerCube environment;
 uniform DirLight dirLight;
 uniform PointLight pointLights[N_MAX_POINT_LIGHTS];
 uniform SpotLight spotLights[N_MAX_SPOT_LIGHTS];
@@ -79,11 +80,11 @@ float DistributionGGX(vec3 N, vec3 H, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
-vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, vec3 Lo, float roughness, float metallic, float shadow);
+vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, float roughness, float metallic);
 float calcShadow(vec4 FragPosLightSpace, vec3 l, vec3 normal);
+vec3 CalcPointLight(PointLight pl, vec3 fragPos, vec3 N, vec3 V, vec3 diffuse, vec3 F0, float roughness, float metallic);
 
 // TBD
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
 
 void main()
@@ -113,8 +114,8 @@ void main()
         vec3 B = normalize(vBitangent);
         mat3 TBN = mat3(T, B, N);
         // now normal is transformed to world space
-        //normal = normalize(TBN * tangentNormal); 
-        normal = normalize(tangentNormal);
+        normal = normalize(TBN * tangentNormal); 
+        //normal = normalize(tangentNormal);
     }
    
         
@@ -126,13 +127,15 @@ void main()
     F0 = mix(F0, material.diffuseColor, metallic);
     // out reflectance
     vec3 Lo = vec3(0.0);
-    Lo += CalcDirLight(dirLight, normal, viewDir, diffuse, F0, Lo, roughness, metallic, shadow);
-    // for (int i = 0; i < numPointLights; ++i)
-    //     result += CalcPointLight(pointLights[i], normal, FragPos, viewDir);
+    vec3 pLight = vec3(0.0);
+    Lo += CalcDirLight(dirLight, normal, viewDir, diffuse, F0, roughness, metallic);
+    for (int i = 0; i < numPointLights; ++i)
+         pLight += CalcPointLight(pointLights[i], FragPos, normal, viewDir, diffuse, F0, roughness, metallic);
     // for (int i = 0; i < numPointLights; ++i)
     //     result += CalcSpotLight(spotLights[i], normal, FragPos, viewDir);
     vec3 ambient = vec3(0.03) * diffuse * ao;
-    vec3 color = ambient + (1 - shadow) * Lo;
+  //  vec3 ambient = texture(environment, normal).rgb * 0.1f;
+    vec3 color = pLight + ambient + (1 - shadow) * Lo;
     // vec3 color = ambient + Lo;
 
     // rienhard tonemapping
@@ -183,12 +186,13 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
-vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, vec3 Lo, float roughness, float metallic, float shadow)
+vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0,float roughness, float metallic)
 {
     // calculate light radiance
     vec3 L = normalize(-light.direction);
     vec3 H = normalize(V + L);
     vec3 radiance = light.diffuse;
+
 
     // cook-torrence brdf
     
@@ -207,6 +211,37 @@ vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, vec3 Lo
     float NdotL = max(dot(N,L), 0.0);
     return ((kD * diffuse / PI) + specular) * radiance * NdotL;
 }
+
+vec3 CalcPointLight(PointLight pl, vec3 fragPos, vec3 N, vec3 V, vec3 diffuse, vec3 F0, float roughness, float metallic)
+{
+    // calculate light radiance
+    vec3 L = normalize(pl.position - fragPos);
+    vec3 H = normalize(V + L);
+
+    float distance    = length(pl.position - fragPos);
+    float denom = pl.constant + pl.linear * distance + pl.quadratic * (distance * distance);
+    float attenuation = 1.0 / max(denom, 0.0001);
+
+    vec3 radiance = pl.diffuse * attenuation;
+
+    // cook-torrence brdf
+    
+    float NDF = DistributionGGX(N,H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3 F = fresnelSchlick(max(dot(H,V), 0.0), F0);
+
+    vec3 kS = F; 
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallic; // metals have no diffuse component
+
+    vec3 numerator = NDF * G * F;
+    float denominator = 4.0 * max(dot(N,V), 0.0) * max(dot(N,L), 0.0) + 0.0001;
+    vec3 specular = numerator / denominator;
+
+    float NdotL = max(dot(N,L), 0.0);
+    return ((kD * diffuse / PI) + specular) * radiance * NdotL;
+}
+
 
 float calcShadow(vec4 fragPosLightSpace, vec3 l, vec3 normal)
 {

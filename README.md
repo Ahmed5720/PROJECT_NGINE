@@ -21,7 +21,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - wireframe rendering of RigidBody Bounding Boxes
  
 ![Alt text](media/bronco4.png)
-![Alt text](media/wine2.png)
+![Alt text](media/wine4.png)
 ![Alt text](media/bronco2.png)
 
 

@@ -228,30 +228,30 @@ void RenderPipeline::uploadLighting(shader& s, const LightEnvironment& lights) {
     // bound its loop so unset array slots are never read.
     char buf[64];
     int activePoints = 0;
-    // for (int i = 0; i < lights.numPointLights; ++i) {
-    //     const PointLight& pl = lights.pointLights[i];
-    //     if (!pl.enabled) continue;
+    for (int i = 0; i < lights.numPointLights; ++i) {
+        const PointLight& pl = lights.pointLights[i];
+        if (!pl.enabled) continue;
 
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "position");
-    //     s.setFloat3(buf, pl.position[0], pl.position[1], pl.position[2]);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "position");
+        s.setFloat3(buf, pl.position[0], pl.position[1], pl.position[2]);
 
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "constant");
-    //     s.setFloat(buf, pl.constant);
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "linear");
-    //     s.setFloat(buf, pl.linear);
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "quadratic");
-    //     s.setFloat(buf, pl.quadratic);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "constant");
+        s.setFloat(buf, pl.constant);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "linear");
+        s.setFloat(buf, pl.linear);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "quadratic");
+        s.setFloat(buf, pl.quadratic);
 
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "ambient");
-    //     s.setFloat3(buf, pl.ambient[0],  pl.ambient[1],  pl.ambient[2]);
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "diffuse");
-    //     s.setFloat3(buf, pl.diffuse[0],  pl.diffuse[1],  pl.diffuse[2]);
-    //     fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "specular");
-    //     s.setFloat3(buf, pl.specular[0], pl.specular[1], pl.specular[2]);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "ambient");
+        s.setFloat3(buf, pl.ambient[0],  pl.ambient[1],  pl.ambient[2]);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "diffuse");
+        s.setFloat3(buf, pl.diffuse[0],  pl.diffuse[1],  pl.diffuse[2]);
+        fmtUniform(buf, sizeof(buf), "pointLights", activePoints, "specular");
+        s.setFloat3(buf, pl.specular[0], pl.specular[1], pl.specular[2]);
 
-    //     ++activePoints;
-    // }
-    // s.setInt("numPointLights", activePoints);
+        ++activePoints;
+    }
+    s.setInt("numPointLights", activePoints);
     // // Spot light — shader uses a single `spotLight` uniform (first enabled only)
     // int activeSpots = 0;
     // for (int i = 0; i < lights.numSpotLights && activeSpots < 1; ++i) {
@@ -335,9 +335,13 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
     pbrShader_->setInt("material.metallicMap", 3);
     pbrShader_->setInt("material.aoMap", 4);
     pbrShader_->setInt("shadowMap", 5); 
+
+    pbrShader_->setInt("environment", 6);
     
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, depthMap);
+    glActiveTexture(GL_TEXTURE6);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
 
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
@@ -355,6 +359,7 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
         pbrShader_->setFloat("material.alpha", node.material->alpha);
         pbrShader_->setFloat3("material.diffuseColor", node.material->diffuseColor);
         pbrShader_->setBool("material.emissive", node.material->emissive);
+        
         // Diffuse map
         if (node.material->diffuseMap.valid())
         {

@@ -22,6 +22,8 @@ void main()
     FragPos = vec3(model * vec4(aPos, 1.0));
     FragPosLightSpace = lightSpace * vec4(FragPos, 1.0);
     // Calculate normal matrix (transpose(inverse(model)) for non-uniform scaling)
+    vTangent = normalize(mat3(model) * aTangent);
+    vBitangent = normalize(mat3(model) *  aBitangent);
     mat3 normalMatrix = transpose(inverse(mat3(model)));
     Normal = normalize(normalMatrix * aNormal);
     uv = aUV;
