@@ -20,7 +20,7 @@ The long term aspiration of this project is to become a small 3D engine that sup
 - rigid body physics (on Seperate thread) WIP.
 - wireframe rendering of RigidBody Bounding Boxes
  
-![Alt text](media/bronco4.png)
+![Alt text](media/bronco6.png)
 ![Alt text](media/wine4.png)
 ![Alt text](media/bronco2.png)
 

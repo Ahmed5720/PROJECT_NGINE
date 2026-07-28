@@ -182,7 +182,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
         // the choice of the ortho bounds and near and far clipping planes seem to be very delicate
         // near and far should depend on where the light source is, the cube should sorround the entire scene
-        const mat4x4 lightProjection = matrix_ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0, 30);
+        const mat4x4 lightProjection = matrix_ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0, 30);
         const mat4x4 lightView = matrix_quickInvert(matrix_pointAt(lightPos,  center, up));
         const mat4x4 lightSpace =  matrix_matmul(lightView, lightProjection);
         glEnable(GL_DEPTH_TEST);
@@ -341,10 +341,13 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
     glActiveTexture(GL_TEXTURE6);
     glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
 
+
+    // sort to resolve transparency..
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
         if (!node.visible)                continue;
         if (node.meshIndex == -1) continue;
+        
         if (node.meshIndex >= static_cast<int>(scene.meshes.size())) continue;
 
         // Model matrix
