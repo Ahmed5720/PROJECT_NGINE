@@ -63,7 +63,9 @@ struct Scene {
     std::vector<RigidBody> rbs;
     std::vector<std::shared_ptr<Material>> mats; // we would like for multiple objects to be able to share the same material without copying and at the same time each object containing its material instead of just an index to it
     LightEnvironment lights;
-    unsigned int cubeMapTexture;
+    unsigned int cubeMapTexture; // old 
+    unsigned int hdrMapTexture;
+    unsigned int hdrCubeMap;
     SceneNode& addNode(const std::string& name, int meshIndex, int matIndex)
     {
         SceneNode node;

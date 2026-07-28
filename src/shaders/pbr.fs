@@ -71,6 +71,7 @@ uniform bool hasMetallicTex;
 uniform vec3 viewPos;
 uniform sampler2D shadowMap;
 uniform samplerCube environment;
+uniform float ambientStrength;
 uniform DirLight dirLight;
 uniform PointLight pointLights[N_MAX_POINT_LIGHTS];
 uniform SpotLight spotLights[N_MAX_SPOT_LIGHTS];
@@ -103,7 +104,7 @@ void main()
     vec3 diffuse = hasDiffuseTex ? vec3(texture(material.diffuseMap, uv)) : material.diffuseColor;
     float roughness = hasRoughnessTex ? texture(material.roughnessMap, uv).r : material.roughness;
     float metallic = hasMetallicTex ? texture(material.metallicMap, uv).r : material.metallic;
-    float ao = hasAoTex ? texture(material.aoMap, uv).r : 1.0;
+    float ao = hasAoTex ? texture(material.aoMap, uv).r : ambientStrength;
     vec3 normal = normalize(Normal);
     if(hasNormalTex)
     {
@@ -133,7 +134,15 @@ void main()
          pLight += CalcPointLight(pointLights[i], FragPos, normal, viewDir, diffuse, F0, roughness, metallic);
     // for (int i = 0; i < numPointLights; ++i)
     //     result += CalcSpotLight(spotLights[i], normal, FragPos, viewDir);
-    vec3 ambient = vec3(0.03) * diffuse * ao;
+  //  vec3 ambient = vec3(0.03) * diffuse * ao;
+
+    vec3 kS = fresnelSchlick(max(dot(normal, viewDir), 0.0), F0);
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - metallic;
+    vec3 irradiance = texture(environment, normal).rgb;
+    vec3 diffuseLight = irradiance * diffuse;
+    vec3 ambient = (kD * diffuseLight) * ao;
+    
   //  vec3 ambient = texture(environment, normal).rgb * 0.1f;
     vec3 color = pLight + ambient + (1 - shadow) * Lo;
     // vec3 color = ambient + Lo;
@@ -207,6 +216,7 @@ vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0,float ro
     vec3 numerator = NDF * G * F;
     float denominator = 4.0 * max(dot(N,V), 0.0) * max(dot(N,L), 0.0) + 0.0001;
     vec3 specular = numerator / denominator;
+
 
     float NdotL = max(dot(N,L), 0.0);
     return ((kD * diffuse / PI) + specular) * radiance * NdotL;

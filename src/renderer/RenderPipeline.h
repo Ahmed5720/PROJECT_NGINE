@@ -12,19 +12,21 @@ class RenderPipeline {
 public:
     bool drawBoundingBox = false;
     RenderPipeline(shader* pbrShader, shader* wireframeShader, ParticleRenderer* particleRenderer,
-    shader* skyBoxShader, shader* shadowShader);
+    shader* skyBoxShader, shader* shadowShader, shader* hdrCaptureShader);
     ~RenderPipeline();
 
     void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
     bool takeShootRequest();
 
 private:
+    void captureHdrCubeMap(Scene& scene);
+    void renderCube();
     void renderShadowPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void renderLightingPass(Scene& scene, const mat4x4& view, const mat4x4& projection, const mat4x4& lightSpace);
     void renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void renderSkyBoxPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void uploadLighting(shader& s, const LightEnvironment& lights);
-    void resizeSceneFramebuffer(int w, int h);
+    void resizeSceneFramebuffer(int w, int h, Scene& scene);
     void destroySceneFramebuffer();
     GLuint getWhiteTex();
     WireFrameMesh wireFrameMesh_;
@@ -33,6 +35,7 @@ private:
     shader* skyBoxShader_ = nullptr;
     shader* shadowShader_ = nullptr;
     shader* pbrShader_ = nullptr;
+    shader* captureHdrShader_ = nullptr;
     ParticleRenderer* particleRenderer_ = nullptr;
     EditorUI editorUI_;
 

@@ -60,7 +60,7 @@ struct SpotLight {
 //   uniforms each frame.
 struct LightEnvironment {
     DirectionalLight sun;
-
+    float ambience = 0.5f;
     PointLight pointLights[MAX_POINT_LIGHTS];
     int        numPointLights = 0;
 

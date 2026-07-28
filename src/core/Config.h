@@ -41,6 +41,9 @@ struct Config {
     std::string shadowFsPath;
     std::string pbrVsPath;
     std::string pbrFsPath;
+    std::string captureHdrShaderVsPath;
+    std::string captureHdrShaderFsPath;
+    std::string hdr;
 
     void resolvePaths() {
         if (basePath.empty())
@@ -66,7 +69,10 @@ struct Config {
         shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "wine.obj");
+        objPath        = slash(objPath, "porche.obj");
         texturePath    = slash(basePath, "textures");
+        hdr            = slash(texturePath, "dusk.hdr");
+        captureHdrShaderVsPath = slash(shaderDir, "hdrCapture.vs");
+        captureHdrShaderFsPath = slash(shaderDir, "hdrCapture.fs");
     }
 };

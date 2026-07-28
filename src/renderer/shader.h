@@ -37,6 +37,8 @@ class shader
         }
         catch(std::ifstream::failure& e){
             std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
+            ID = 0;
+            return;
         }
         const char* vShaderCode = vertexCode.c_str();
         const char* fShaderCode = fragmentCode.c_str();
@@ -46,18 +48,18 @@ class shader
         vertex = glCreateShader(GL_VERTEX_SHADER);
         glShaderSource(vertex, 1, &vShaderCode, NULL);
         glCompileShader(vertex);
-        checkCompileErrors(vertex, "VERTEX");
+        checkCompileErrors(vertex, "VERTEX", vertexPath);
         // fragment Shader
         fragment = glCreateShader(GL_FRAGMENT_SHADER);
         glShaderSource(fragment, 1, &fShaderCode, NULL);
         glCompileShader(fragment);
-        checkCompileErrors(fragment, "FRAGMENT");
+        checkCompileErrors(fragment, "FRAGMENT", fragmentPath);
         // shader Program
         ID = glCreateProgram();
         glAttachShader(ID, vertex);
         glAttachShader(ID, fragment);
         glLinkProgram(ID);
-        checkCompileErrors(ID, "PROGRAM");
+        checkCompileErrors(ID, "PROGRAM", std::string(vertexPath) + " + " + fragmentPath);
 
         glDeleteShader(vertex);
         glDeleteShader(fragment);
@@ -196,7 +198,7 @@ class shader
         return prog;
     }
 
-    void checkCompileErrors(unsigned int shader, std::string type)
+    void checkCompileErrors(unsigned int shader, std::string type, const std::string& path = "" )
     {
         int success;
         char infoLog[1024];
@@ -207,6 +209,13 @@ class shader
             {
                 glGetShaderInfoLog(shader, 1024, NULL, infoLog);
                 std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+
+                 GLint len = 0;
+                glGetShaderiv(shader, GL_SHADER_SOURCE_LENGTH, &len);
+                std::string src(len, '\0');
+                glGetShaderSource(shader, len, nullptr, src.data());
+                std::cout << "---- SOURCE FED TO " << type << " STAGE ----\n"
+                        << src << "\n---- END SOURCE ----\n";
             }
         }
         else

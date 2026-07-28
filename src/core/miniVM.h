@@ -273,6 +273,22 @@ inline mat4x4 matrix_pointAt(const vec3f& pos, const vec3f& target, const vec3f&
 
     return matrix;
 }
+inline mat4x4 matrix_lookAtRH(const vec3f& eye, const vec3f& center, const vec3f& up) {
+    vec3f f = vector_normalize(vector_sub(center, eye));
+    vec3f s = vector_normalize(vector_cross(f, up));
+    vec3f u = vector_cross(s, f);
+
+    mat4x4 m;
+    m.m[0][0]= s.X; m.m[0][1]= u.X; m.m[0][2]=-f.X; m.m[0][3]=0.0f;
+    m.m[1][0]= s.Y; m.m[1][1]= u.Y; m.m[1][2]=-f.Y; m.m[1][3]=0.0f;
+    m.m[2][0]= s.Z; m.m[2][1]= u.Z; m.m[2][2]=-f.Z; m.m[2][3]=0.0f;
+    m.m[3][0]=-vector_dot(s,eye);
+    m.m[3][1]=-vector_dot(u,eye);
+    m.m[3][2]= vector_dot(f,eye);
+    m.m[3][3]=1.0f;
+    return m;
+}
+
 inline mat4x4 matrix_quickInvert(const mat4x4& m) {
     mat4x4 matrix;
     matrix.m[0][0] = m.m[0][0]; matrix.m[0][1] = m.m[1][0]; matrix.m[0][2] = m.m[2][0]; matrix.m[0][3] = 0.0f;

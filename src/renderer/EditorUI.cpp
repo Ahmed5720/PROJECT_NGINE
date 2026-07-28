@@ -269,9 +269,9 @@ void EditorUI::drawCameraSection(Scene& scene, float pi) {
 void EditorUI::drawLightingSection(Scene& scene, float pi) {
     ImGui::Text("Directional (Sun)");
     ImGui::DragFloat3("Direction##sun", scene.lights.sun.direction, 0.01f, -1.f, 1.f);
-    ImGui::ColorEdit3("Ambient##sun", scene.lights.sun.ambient);
+    ImGui::DragFloat("AmbientStrength", &scene.lights.ambience, 0.01, 0.0f, 1.0f);
+    // ImGui::ColorEdit3("Specular##sun", scene.lights.sun.specular);
     ImGui::ColorEdit3("Diffuse##sun", scene.lights.sun.diffuse);
-    ImGui::ColorEdit3("Specular##sun", scene.lights.sun.specular);
 
     ImGui::Separator();
     ImGui::Text("Point Lights (%d / %d)", scene.lights.numPointLights, MAX_POINT_LIGHTS);

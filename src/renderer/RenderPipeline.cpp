@@ -81,8 +81,8 @@ void debugDrawDepthTex(GLuint tex) {
 
 } // namespace
 
-RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow)
-    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) {
+RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow, shader* hdrCapture)
+    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) , captureHdrShader_(hdrCapture) {
     wireFrameMesh_.init();
 }
 
@@ -90,7 +90,7 @@ RenderPipeline::~RenderPipeline() {
     destroySceneFramebuffer();
 }
 
-void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
+void RenderPipeline::resizeSceneFramebuffer(int w, int h, Scene& scene) {
     if (w < 8 || h < 8)
         return;
     if (w == sceneFbW_ && h == sceneFbH_)
@@ -99,7 +99,6 @@ void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
     destroySceneFramebuffer();
     sceneFbW_ = w;
     sceneFbH_ = h;
-    std::cout << "AA\n";
     glGenFramebuffers(1, &sceneFbo_);
     glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
     glGenTextures(1, &sceneColorTex_);
@@ -108,12 +107,10 @@ void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneColorTex_, 0);
-    std::cout << "BB\n";
     glGenRenderbuffers(1, &sceneDepthRbo_);
     glBindRenderbuffer(GL_RENDERBUFFER, sceneDepthRbo_);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, w, h);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, sceneDepthRbo_);
-    std::cout << "CC\n";
     glGenFramebuffers(1, &depthMapFbo_);
     glBindFramebuffer(GL_FRAMEBUFFER, depthMapFbo_);
     glGenTextures(1, &depthMap);
@@ -125,16 +122,19 @@ void RenderPipeline::resizeSceneFramebuffer(int w, int h) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    std::cout << "DD\n";
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
+
+
+    // captureHDRcubemap
+    captureHdrCubeMap(scene);
+
     const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "[RenderPipeline] Scene framebuffer incomplete: 0x" << std::hex << status << std::dec << "\n";
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    std::cout << "EE\n";
 }
 
 void RenderPipeline::destroySceneFramebuffer() {
@@ -168,7 +168,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
     const EditorUI::Layout layout = editorUI_.computeLayout(framebufferW, framebufferH);
 
     if (layout.sceneW >= 8 && layout.sceneH >= 8) {
-        resizeSceneFramebuffer(layout.sceneW, layout.sceneH);
+        resizeSceneFramebuffer(layout.sceneW, layout.sceneH, scene);
         const float aspect = static_cast<float>(layout.sceneW) / static_cast<float>(layout.sceneH);
 
         // shadows assume single directional light source, same method would work for spotlights
@@ -219,9 +219,9 @@ void RenderPipeline::uploadLighting(shader& s, const LightEnvironment& lights) {
     // Directional light
     const DirectionalLight& sun = lights.sun;
     s.setFloat3("dirLight.direction", sun.direction[0], sun.direction[1], sun.direction[2]);
-    s.setFloat3("dirLight.ambient",   sun.ambient[0],   sun.ambient[1],   sun.ambient[2]);
     s.setFloat3("dirLight.diffuse",   sun.diffuse[0],   sun.diffuse[1],   sun.diffuse[2]);
-    s.setFloat3("dirLight.specular",  sun.specular[0],  sun.specular[1],  sun.specular[2]);
+    // s.setFloat3("dirLight.ambient",   sun.ambient[0],   sun.ambient[1],   sun.ambient[2]);
+    // s.setFloat3("dirLight.specular",  sun.specular[0],  sun.specular[1],  sun.specular[2]);
 
     // Point lights
     // Only upload up to numPointLights; the shader uses `numPointLights` to
@@ -285,9 +285,6 @@ void RenderPipeline::renderShadowPass(Scene& scene, const mat4x4& light, const m
     setMat4(*shadowShader_, "projection", projection);
 
     GLint prog = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
-    std::cout << "light=" << glGetUniformLocation(prog, "light")
-              << " proj=" << glGetUniformLocation(prog, "projection")
-              << " model=" << glGetUniformLocation(prog, "model") << "\n";
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
         if (!node.visible) continue;
@@ -304,7 +301,7 @@ void RenderPipeline::renderShadowPass(Scene& scene, const mat4x4& light, const m
         ++drawn;
 
     }
-    std::cout << "shadow draws: " << drawn << "\n";
+    // std::cout << "shadow draws: " << drawn << "\n";
 
     checkGLError("renderShadowDepthPass");
 }
@@ -337,11 +334,12 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
     pbrShader_->setInt("shadowMap", 5); 
 
     pbrShader_->setInt("environment", 6);
-    
+    pbrShader_->setFloat("ambientStrength", scene.lights.ambience);
+
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, depthMap);
     glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
 
     // Per-node draw
     for (const SceneNode& node : scene.nodes) {
@@ -366,60 +364,60 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
             pbrShader_->setBool("hasDiffuseTex", GL_TRUE);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, node.material->diffuseMap.id);
-            std::cout << "Found Diffuse\n";
+          //  std::cout << "Found Diffuse\n";
         }
         else
         {
             pbrShader_->setBool("hasDiffuseTex", GL_FALSE);
-            std::cout << "NO Diffuse!\n";
+         //   std::cout << "NO Diffuse!\n";
         }
         if(node.material->roughnessMap.valid())
         {
             pbrShader_->setBool("hasRoughnessTex", GL_TRUE);
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, node.material->roughnessMap.id);
-            std::cout << "Found Rougness\n";
+        //    std::cout << "Found Rougness\n";
         }
         else
         {
             pbrShader_->setBool("hasRoughnessTex", GL_FALSE);
-            std::cout << "No Roughness\n";
+          //  std::cout << "No Roughness\n";
         }
         if(node.material->normalMap.valid())
         {   
             pbrShader_->setBool("hasNormalTex", GL_TRUE);
             glActiveTexture(GL_TEXTURE2);
             glBindTexture(GL_TEXTURE_2D, node.material->normalMap.id);
-            std::cout << "Found Normal\n";
+          //  std::cout << "Found Normal\n";
         }
         else
         {
             pbrShader_->setBool("hasNormalTex", GL_FALSE);
-            std::cout << "no Normal!!\n";
+          //  std::cout << "no Normal!!\n";
         }
         if(node.material->metallicMap.valid())
         {   
             pbrShader_->setBool("hasMetallicTex", GL_TRUE);
             glActiveTexture(GL_TEXTURE3);
             glBindTexture(GL_TEXTURE_2D, node.material->metallicMap.id);
-            std::cout << "Found Mettallic\n";
+          //  std::cout << "Found Mettallic\n";
         }
         else
         {
             pbrShader_->setBool("hasMetallicTex", GL_FALSE);
-            std::cout << "No Metallic!!\n";
+          //  std::cout << "No Metallic!!\n";
         }
         if(node.material->aoMap.valid())
         {   
             pbrShader_->setBool("hasAoTex", GL_TRUE);
             glActiveTexture(GL_TEXTURE4);
             glBindTexture(GL_TEXTURE_2D, node.material->aoMap.id);
-            std::cout << "Found ao\n";
+           // std::cout << "Found ao\n";
         }
         else
         {
             pbrShader_->setBool("hasAoTex", GL_FALSE);
-            std::cout << "No AO!!!\n";
+            //std::cout << "No AO!!!\n";
         }
 
         scene.meshes[node.meshIndex].draw();
@@ -458,61 +456,88 @@ void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const
 
 void RenderPipeline::renderSkyBoxPass(Scene& scene, const mat4x4& view, const mat4x4& projection)
 {   
-    static GLuint skyboxVAO = 0;
-    static GLuint skyboxVBO = 0;
-
-    if(skyboxVAO == 0)
+    
+    // Remove translation from view matrix
+    mat4x4 viewNoTranslation = view;
+    viewNoTranslation.m[3][0] = 0;
+    viewNoTranslation.m[3][1] = 0;
+    viewNoTranslation.m[3][2] = 0;
+    
+    glDepthMask(GL_FALSE);
+    glDepthFunc(GL_LEQUAL);
+    skyBoxShader_->use();
+    skyBoxShader_->setInt("skybox", 0);
+    setMat4(*skyBoxShader_, "view", viewNoTranslation);
+    setMat4(*skyBoxShader_, "projection", projection);
+    //glBindVertexArray(skyboxVAO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
+    //glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
+    // glDrawArrays(GL_TRIANGLES, 0, 36);
+    // glBindVertexArray(0);
+    renderCube();
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+}
+// renders a general purpose cube useful for multiple reasons
+void RenderPipeline::renderCube()
+{   
+    static GLuint cubeVAO = 0;
+    static GLuint cubeVBO = 0;
+    // only does this once
+    if(cubeVAO == 0)
     {
-        glGenVertexArrays(1, &skyboxVAO);
-        glGenBuffers(1, &skyboxVBO);
-        float skyboxVertices[] = {
-        // positions          
-        -1.0f,  1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
+        float Vertices[] = {
+            // positions          
+            -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
 
-        -1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f, -1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
 
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
 
-        -1.0f, -1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f, -1.0f,  1.0f,
-        -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
 
-        -1.0f,  1.0f, -1.0f,
-        1.0f,  1.0f, -1.0f,
-        1.0f,  1.0f,  1.0f,
-        1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f,  1.0f,
-        -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,
 
-        -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-        1.0f, -1.0f, -1.0f,
-        1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f,  1.0f,
-        1.0f, -1.0f,  1.0f
-    };
-        glBindVertexArray(skyboxVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
-        
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f
+        };
+        glGenVertexArrays(1, &cubeVAO);
+        glGenBuffers(1, &cubeVBO);
+
+        glBindVertexArray(cubeVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Vertices), Vertices, GL_STATIC_DRAW);
+            
         // Position attribute
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
@@ -521,24 +546,73 @@ void RenderPipeline::renderSkyBoxPass(Scene& scene, const mat4x4& view, const ma
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
-    
-    // Remove translation from view matrix
-    mat4x4 viewNoTranslation = view;
-    viewNoTranslation.m[3][0] = 0;
-    viewNoTranslation.m[3][1] = 0;
-    viewNoTranslation.m[3][2] = 0;
-
-    glDepthMask(GL_FALSE);
-    glDepthFunc(GL_LEQUAL);
-    skyBoxShader_->use();
-    setMat4(*skyBoxShader_, "view", viewNoTranslation);
-    setMat4(*skyBoxShader_, "projection", projection);
-    glBindVertexArray(skyboxVAO);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
+    glBindVertexArray(cubeVAO);
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
+}
+void RenderPipeline::captureHdrCubeMap(Scene& scene)
+{
+    // first generate the framebuffer and renderbuffers needed so that we can capture images and save them as textures for the cubemap
+    unsigned int captureFBO, captureRBO;
+    glGenFramebuffers(1, &captureFBO);
+    glGenRenderbuffers(1, &captureRBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, captureRBO); 
+
+
+    // then we create the cubemap texture
+    //unsigned int cubeMapTexture;
+    glGenTextures(1, &scene.hdrCubeMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
+    for (unsigned int i = 0; i < 6; i++)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    mat4x4 captureProjection = matrix_makeProjection(90.0f, 1.0f, 0.1f, 10.0f);
+    mat4x4 captureViews[] = 
+    {   // why is up -1?
+        matrix_lookAtRH(vec3f(0,0,0), vec3f( 1, 0, 0), vec3f(0,-1, 0)),
+        matrix_lookAtRH(vec3f(0,0,0), vec3f(-1, 0, 0), vec3f(0,-1, 0)),
+        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 1, 0), vec3f(0, 0, 1)),
+        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0,-1, 0), vec3f(0, 0,-1)),
+        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0, 1), vec3f(0,-1, 0)),
+        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0,-1), vec3f(0,-1, 0))
+    };
+
+
+    captureHdrShader_->use();
+    captureHdrShader_->setInt("equirectangularMap", 0);
+    setMat4(*captureHdrShader_, "projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scene.hdrMapTexture);
+
+    // sets viewport to capture dims
+    glViewport(0,0, 512, 512);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    for (int i = 0; i < 6; i++)
+    {
+        setMat4(*captureHdrShader_, "view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, scene.hdrCubeMap, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderCube();
+
+    }
+
+    glDeleteFramebuffers(1, &captureFBO);
+    glDeleteRenderbuffers(1, &captureRBO);
+
+    std::cout << "Captured HDR cube maps 6 faces\n";
+    checkGLError("renderCaptureCubeMapPass");
 }
 GLuint RenderPipeline::getWhiteTex() {
     if (whiteTex_ != 0) return whiteTex_;
