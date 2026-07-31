@@ -25,8 +25,9 @@ This project is practically a testbed for everything I have learned studying com
 - rigid body physics (on Seperate thread) WIP.
 - wireframe rendering of RigidBody Bounding Boxes
 - Image based Diffuse/ Specular Lighting 
-![Alt text](media/bronco6.png)
 ![Alt text](media/wine6.png)
+![Alt text](media/subaru.png)
+![Alt text](media/bronco6.png)
 ![Alt text](media/bronco2.png)
 
 
