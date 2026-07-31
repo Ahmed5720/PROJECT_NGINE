@@ -33,6 +33,9 @@ This project is practically a testbed for everything I have learned studying com
 
 ## TBD
 - Extending Physx to be actually useful
+- Bloom
+- Gizmos for light sources
+- Object Selection using mouse cursor (screenToWorld project)
 - Json Scene description import / export
 - Cube mapped shadows for Point Lights
 - Planar reflections with projective texture mapping
