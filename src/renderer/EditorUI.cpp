@@ -240,6 +240,7 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
     ImGui::DragFloat("metallic", &node.material->metallic, 0.01f, 0.0f, 1.0f);
     ImGui::DragFloat("alpha", &node.material->alpha, 0.01f, 0.0f, 1.0f);
     ImGui::Checkbox("isEmissive", &node.material->emissive);
+    ImGui::Checkbox("isTransparent", &node.material->transparent);
     ImGui::Text("Diffuse:  %s", node.material->diffuseMap.valid() ? "loaded" : "fallback");
     ImGui::Text("Specular: %s", node.material->specularMap.valid() ? "loaded" : "fallback");
 
@@ -257,9 +258,11 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
 
 void EditorUI::drawCameraSection(Scene& scene, float pi) {
     float cameraYawDeg = scene.camera.yaw * (180.f / pi);
+    
     ImGui::DragFloat3("Position##cam", &scene.camera.position.x, 0.01f, -100.f, 100.f);
     if (ImGui::DragFloat("Yaw (deg)##cam", &cameraYawDeg, 1.f, -180.f, 180.f))
         scene.camera.yaw = cameraYawDeg * (pi / 180.f);
+    ImGui::DragFloat("Fov (deg)##cam", &scene.camera.fovDeg, 1.f, 1.0f, 200.0f);
     if (ImGui::Button("Reset Camera##cam")) {
         scene.camera.position = {0.f, 0.f, 0.f};
         scene.camera.yaw = 0.f;

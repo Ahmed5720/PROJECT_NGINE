@@ -218,6 +218,9 @@ bool Application::init() {
     skyBoxShader_ = new shader(config_.skyboxVsPath.c_str(), config_.skyboxFsPath.c_str());
     shadowShader_ = new shader(config_.shadowVsPath.c_str(), config_.shadowFsPath.c_str());
     captureHdrShader_ = new shader(config_.captureHdrShaderVsPath.c_str(), config_.captureHdrShaderFsPath.c_str());
+    prefilterShader_ = new shader(config_.prefilterShaderVsPath.c_str(), config_.prefilterShaderFsPath.c_str()); 
+    brdfShader_ = new shader(config_.brdfShaderVsPath.c_str(), config_.brdfShaderFsPath.c_str());
+    convolveShader_ = new shader(config_.convolveShaderVsPath.c_str(), config_.convolveShaderFsPath.c_str());
     // Load OBJ: each OBJ sub-mesh becomes one SceneNode with its own
     // Material.  The MeshGPU (GPU buffers) lives in scene_.meshes and
     // is referenced by index from the node.
@@ -335,7 +338,10 @@ bool Application::init() {
     particleRenderer_ = new ParticleRenderer();
     particleRenderer_->init(config_.particleVsPath, config_.particleFsPath);
     // it would be nice to use the builder pattern on construction here i think
-    pipeline_ = new RenderPipeline(pbrShader_, wireFrameShader_, particleRenderer_, skyBoxShader_, shadowShader_, captureHdrShader_);
+    // also here we create shaders on app side and renderpipeline side and copy their pointers. so on delete we could have a dangling pointer on the other side.
+    // unique_ptr?
+    pipeline_ = new RenderPipeline(pbrShader_, wireFrameShader_, particleRenderer_, skyBoxShader_,
+    shadowShader_, captureHdrShader_, prefilterShader_, brdfShader_, convolveShader_);
 
     glfwSwapInterval(1);
     initialized_ = true;

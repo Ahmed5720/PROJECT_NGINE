@@ -18,7 +18,7 @@ inline AppArgs parseArgs(int argc, char** argv) {
 struct Config {
     int windowWidth  = 1200;
     int windowHeight = 1200;
-    float fovDeg     = 90.0f;
+    float fovDeg     = 50.0f;
     float zNear      = 0.1f;
     float zFar       = 1000.0f;
 
@@ -44,6 +44,12 @@ struct Config {
     std::string captureHdrShaderVsPath;
     std::string captureHdrShaderFsPath;
     std::string hdr;
+    std::string prefilterShaderVsPath;
+    std::string prefilterShaderFsPath;
+    std::string brdfShaderVsPath;
+    std::string brdfShaderFsPath;
+    std::string convolveShaderVsPath;
+    std::string convolveShaderFsPath;
 
     void resolvePaths() {
         if (basePath.empty())
@@ -69,10 +75,16 @@ struct Config {
         shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
         objPath        = slash(basePath, "..");
-        objPath        = slash(objPath, "porche.obj");
+        objPath        = slash(objPath, "wineNew.obj");
         texturePath    = slash(basePath, "textures");
-        hdr            = slash(texturePath, "dusk.hdr");
+        hdr            = slash(texturePath, "cowboy.hdr");
         captureHdrShaderVsPath = slash(shaderDir, "hdrCapture.vs");
         captureHdrShaderFsPath = slash(shaderDir, "hdrCapture.fs");
+        prefilterShaderVsPath = slash(shaderDir, "prefilter.vs");
+        prefilterShaderFsPath = slash(shaderDir, "prefilter.fs");
+        brdfShaderVsPath = slash(shaderDir, "brdf.vs");
+        brdfShaderFsPath = slash(shaderDir, "brdf.fs");
+        convolveShaderVsPath = slash(shaderDir, "convolve.vs");
+        convolveShaderFsPath = slash(shaderDir, "convolve.fs");
     }
 };

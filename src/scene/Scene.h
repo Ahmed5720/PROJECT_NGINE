@@ -59,22 +59,33 @@ struct Scene {
     Camera camera;
 
     std::vector<SceneNode> nodes;
+    std::vector<SceneNode> transparent_nodes;
     std::vector<MeshGPU> meshes;
     std::vector<RigidBody> rbs;
     std::vector<std::shared_ptr<Material>> mats; // we would like for multiple objects to be able to share the same material without copying and at the same time each object containing its material instead of just an index to it
     LightEnvironment lights;
-    unsigned int cubeMapTexture; // old 
-    unsigned int hdrMapTexture;
-    unsigned int hdrCubeMap;
+    unsigned int cubeMapTexture; // deprecated
+    unsigned int hdrMapTexture; // equirectangular (before cubemapping)
+    unsigned int hdrCubeMap; // produced by cubemapping equirectangular map
+    unsigned int irradianceCubeMap; // produced by convolving hdrCubeMap
+    unsigned int prefilterMap;
+    unsigned int brdfLUT; // find later
     SceneNode& addNode(const std::string& name, int meshIndex, int matIndex)
     {
         SceneNode node;
         node.name = name;
         node.meshIndex = meshIndex;
         node.material = mats[matIndex];
-        nodes.push_back(std::move(node));
+        if(node.material->transparent)
+        {
+            transparent_nodes.push_back(std::move(node));
+            return transparent_nodes.back();
+        }
+        else
+            nodes.push_back(std::move(node));
         return nodes.back();
     }
+    
     float backgroundColor[3] = {0.2f, 0.5f, 0.5f};
 
 

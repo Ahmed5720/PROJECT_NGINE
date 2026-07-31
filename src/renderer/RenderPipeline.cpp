@@ -80,9 +80,11 @@ void debugDrawDepthTex(GLuint tex) {
 
 
 } // namespace
-
-RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow, shader* hdrCapture)
-    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) , skyBoxShader_(skyShader) , shadowShader_(shadow) , captureHdrShader_(hdrCapture) {
+// here the shader is first built on 
+RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow, shader* hdrCapture, shader* prefilter, shader* brdf, shader* convolve)
+    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) ,
+    skyBoxShader_(skyShader) , shadowShader_(shadow) , captureHdrShader_(hdrCapture) ,
+    prefilterShader_(prefilter) , brdfShader_(brdf) , convolveShader_(convolve) {
     wireFrameMesh_.init();
 }
 
@@ -127,9 +129,17 @@ void RenderPipeline::resizeSceneFramebuffer(int w, int h, Scene& scene) {
     glReadBuffer(GL_NONE);
 
 
-    // captureHDRcubemap
+    // captureHDRcubemap, then prefilter for speculars
+    // this is actually now happening every time the screen is resized which doesnt make sense, but thats fine because later
+    // i want it to happen every nth frame anyway
     captureHdrCubeMap(scene);
-
+    convolveHDRCubeMap(scene);
+    prefilterSpecularCubemap(scene);
+    if(!generatedLUT)
+    {
+        genBrdfLUT();
+        generatedLUT = true;
+    }
     const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "[RenderPipeline] Scene framebuffer incomplete: 0x" << std::hex << status << std::dec << "\n";
@@ -182,7 +192,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         const mat4x4 projection = scene.camera.getProjectionMatrix(aspect, zNear, zFar);
         // the choice of the ortho bounds and near and far clipping planes seem to be very delicate
         // near and far should depend on where the light source is, the cube should sorround the entire scene
-        const mat4x4 lightProjection = matrix_ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0, 30);
+        const mat4x4 lightProjection = matrix_ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0, 30);
         const mat4x4 lightView = matrix_quickInvert(matrix_pointAt(lightPos,  center, up));
         const mat4x4 lightSpace =  matrix_matmul(lightView, lightProjection);
         glEnable(GL_DEPTH_TEST);
@@ -197,10 +207,8 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         glViewport(0, 0, layout.sceneW, layout.sceneH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderSkyBoxPass(scene, view, projection);
-        glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         renderLightingPass(scene, view, projection, lightSpace);
-        glDisable(GL_BLEND);
         renderWireframePass(scene, view, projection);
        // debugDrawDepthTex(depthMap); 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -302,9 +310,10 @@ void RenderPipeline::renderShadowPass(Scene& scene, const mat4x4& light, const m
 
     }
     // std::cout << "shadow draws: " << drawn << "\n";
-
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGLError("renderShadowDepthPass");
 }
+
 // renderLightingPass
 //   1. Upload per-frame uniforms: matrices, camera, all lights.
 //   2. For each visible SceneNode: upload model matrix + material, draw.
@@ -331,30 +340,80 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
     pbrShader_->setInt("material.normalMap",2);
     pbrShader_->setInt("material.metallicMap", 3);
     pbrShader_->setInt("material.aoMap", 4);
-    pbrShader_->setInt("shadowMap", 5); 
 
+
+    pbrShader_->setInt("shadowMap", 5); 
     pbrShader_->setInt("environment", 6);
+    pbrShader_->setInt("specularMipMap", 7);
+    pbrShader_->setInt("brdfLUT", 8);
     pbrShader_->setFloat("ambientStrength", scene.lights.ambience);
 
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_2D, depthMap);
     glActiveTexture(GL_TEXTURE6);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.irradianceCubeMap);
+    glActiveTexture(GL_TEXTURE7);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.prefilterMap);
+    glActiveTexture(GL_TEXTURE8);
+    glBindTexture(GL_TEXTURE_2D, brdfLUT); 
 
 
     // sort to resolve transparency..
     // Per-node draw
+    scene.transparent_nodes.clear();
     for (const SceneNode& node : scene.nodes) {
         if (!node.visible)                continue;
         if (node.meshIndex == -1) continue;
-        
+        if (node.material->transparent)
+        {    
+            scene.transparent_nodes.push_back(node);
+            continue;
+        }
         if (node.meshIndex >= static_cast<int>(scene.meshes.size())) continue;
-
+        
         // Model matrix
+        
+        renderNode(scene, node, pbrShader_);
+        
+    }
+
+    if (scene.transparent_nodes.size() == 0)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        checkGLError("renderPBRpass");
+        return;
+    }
+    // sort transparent nodes by distance from camera
+    vec3f camPos = scene.camera.position;
+    sort(scene.transparent_nodes.begin(), scene.transparent_nodes.end(), 
+    [&camPos](const SceneNode& a, const SceneNode& b)
+    {
+        float d1 = vector_dist(a.position, camPos);
+        float d2 = vector_dist(b.position, camPos);
+        return d1 > d2; // farthest first (back to front)
+    }
+    );
+
+    glEnable(GL_BLEND);
+    for (const SceneNode& node : scene.transparent_nodes)
+    {
+        if (!node.visible) continue;
+        if (node.meshIndex == -1) continue;
+        if (node.meshIndex >= static_cast<int>(scene.meshes.size())) continue;
+    
+        renderNode(scene, node, pbrShader_);
+    }
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("renderPBRpass");
+}
+
+void RenderPipeline::renderNode(const Scene& scene,const SceneNode& node, shader* pbrShader_)
+{
+    
+
         mat4x4 model = node.modelMatrix();
         setMat4(*pbrShader_, "model", model);
-
-
         pbrShader_->setFloat("material.roughness", node.material->roughness);
         pbrShader_->setFloat("material.metallic", node.material->metallic);
         pbrShader_->setFloat("material.alpha", node.material->alpha);
@@ -424,9 +483,6 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
         }
 
         scene.meshes[node.meshIndex].draw();
-    }
-
-    checkGLError("renderPBRpass");
 }
 void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection)
 {
@@ -454,6 +510,7 @@ void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const
     }
     glEnable(GL_DEPTH_TEST);
     glLineWidth(1.0f);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGLError("renderLinePass");
 }
 
@@ -475,12 +532,11 @@ void RenderPipeline::renderSkyBoxPass(Scene& scene, const mat4x4& view, const ma
     //glBindVertexArray(skyboxVAO);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
-    //glBindTexture(GL_TEXTURE_CUBE_MAP, scene.cubeMapTexture);
-    // glDrawArrays(GL_TRIANGLES, 0, 36);
-    // glBindVertexArray(0);
     renderCube();
     glDepthFunc(GL_LESS);
     glDepthMask(GL_TRUE);
+   // glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("RenderSkyBoxPass");
 }
 // renders a general purpose cube useful for multiple reasons
 void RenderPipeline::renderCube()
@@ -553,12 +609,53 @@ void RenderPipeline::renderCube()
     glDrawArrays(GL_TRIANGLES, 0, 36);
     glBindVertexArray(0);
 }
+
+void RenderPipeline::renderQuad()
+{
+    static GLuint quadVAO = 0;
+    static GLuint quadVBO = 0;
+    // only does this once
+    if(quadVAO == 0)
+    {
+        float Vertices[] = {
+            // positions + uvs         
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Vertices), Vertices, GL_STATIC_DRAW);
+            
+        // Position attribute
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        
+        // uv attribute
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        // Unbind
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
 void RenderPipeline::captureHdrCubeMap(Scene& scene)
 {
     // first generate the framebuffer and renderbuffers needed so that we can capture images and save them as textures for the cubemap
-    unsigned int captureFBO, captureRBO;
-    glGenFramebuffers(1, &captureFBO);
-    glGenRenderbuffers(1, &captureRBO);
+    // itd be better if we reuse these
+    if (!hasValidBuffers)
+    {
+        glGenFramebuffers(1, &captureFBO);
+        glGenRenderbuffers(1, &captureRBO);
+        hasValidBuffers = true;
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
     glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
@@ -581,17 +678,13 @@ void RenderPipeline::captureHdrCubeMap(Scene& scene)
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    mat4x4 captureProjection = matrix_makeProjection(90.0f, 1.0f, 0.1f, 10.0f);
-    mat4x4 captureViews[] = 
-    {   // why is up -1?
-        matrix_lookAtRH(vec3f(0,0,0), vec3f( 1, 0, 0), vec3f(0,-1, 0)),
-        matrix_lookAtRH(vec3f(0,0,0), vec3f(-1, 0, 0), vec3f(0,-1, 0)),
-        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 1, 0), vec3f(0, 0, 1)),
-        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0,-1, 0), vec3f(0, 0,-1)),
-        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0, 1), vec3f(0,-1, 0)),
-        matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0,-1), vec3f(0,-1, 0))
-    };
-
+    captureProjection = matrix_makeProjection(90.0f, 1.0f, 0.1f, 10.0f);
+    captureViews[0] = matrix_lookAtRH(vec3f(0,0,0), vec3f( 1, 0, 0), vec3f(0,-1, 0));
+    captureViews[1] = matrix_lookAtRH(vec3f(0,0,0), vec3f(-1, 0, 0), vec3f(0,-1, 0));
+    captureViews[2] = matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 1, 0), vec3f(0, 0, 1));
+    captureViews[3] = matrix_lookAtRH(vec3f(0,0,0), vec3f( 0,-1, 0), vec3f(0, 0,-1));
+    captureViews[4] = matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0, 1), vec3f(0,-1, 0));
+    captureViews[5] = matrix_lookAtRH(vec3f(0,0,0), vec3f( 0, 0,-1), vec3f(0,-1, 0));
 
     captureHdrShader_->use();
     captureHdrShader_->setInt("equirectangularMap", 0);
@@ -611,11 +704,144 @@ void RenderPipeline::captureHdrCubeMap(Scene& scene)
 
     }
 
-    glDeleteFramebuffers(1, &captureFBO);
-    glDeleteRenderbuffers(1, &captureRBO);
+    // glDeleteFramebuffers(1, &captureFBO);
+    // glDeleteRenderbuffers(1, &captureRBO);
 
     std::cout << "Captured HDR cube maps 6 faces\n";
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGLError("renderCaptureCubeMapPass");
+}
+// convolves HDR map to produce irradiance map for diffuse IBL
+void RenderPipeline::convolveHDRCubeMap(Scene& scene)
+{
+    
+    glGenTextures(1, &irradianceMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, irradianceMap);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 32, 32, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 32, 32);
+
+    convolveShader_->use();
+    convolveShader_->setInt("environmentMap", 0);
+    setMat4(*convolveShader_, "projection", captureProjection);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.irradianceCubeMap);
+
+    glViewport(0, 0, 32, 32);
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    for (unsigned int i = 0; i < 6; ++i)
+    {
+        setMat4(*convolveShader_, "view", captureViews[i]);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, irradianceMap, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        renderCube();
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("HDR convolution Pass");
+}
+// we also want to convolve the HDRmap currently its being used as is so diffuse gi look off
+
+// if this is called again after init (seperately from captureHDRcubemap, we'd have to change a few things) 
+// that would be useful for capturing the actual rendered scene to get true reflections
+void RenderPipeline::prefilterSpecularCubemap(Scene& scene)
+{
+    glGenTextures(1, &scene.prefilterMap);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.prefilterMap);
+    for (unsigned int i = 0; i < 6; i++)
+    {   
+        // heighest map level is 128 * 128
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, nullptr);
+    }
+
+    
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+    // run a monte carlo simulation on the environment lighting to create the prefilter cubemap
+    prefilterShader_->use();
+
+    prefilterShader_->setInt("environment", 0);
+  
+    setMat4(*prefilterShader_, "projection", captureProjection);
+  
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, scene.hdrCubeMap);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+  
+    // the mip levels are used because we want speculars to be blurrier as the surface gets rougher
+    // so we generate 5 levels and let it interpolate based on roughness
+    unsigned int maxMipLevel = 5;
+    for (unsigned int i = 0; i < maxMipLevel; i++)
+    {
+        // resize frambuffers
+        // 128, 64, 32, 16, 8
+        unsigned int mipWidth  = static_cast<unsigned int>(128 * std::pow(0.5, i));
+        unsigned int mipHeight = static_cast<unsigned int>(128 * std::pow(0.5, i));
+        glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, mipWidth, mipHeight);
+        glViewport(0,0, mipWidth, mipHeight); 
+
+        float roughness = float(i) / float(maxMipLevel-1);
+        prefilterShader_->setFloat("roughness", roughness);
+        // for each face..
+        for (unsigned int j = 0; j < 6; j++)
+        {
+            setMat4(*prefilterShader_, "view", captureViews[j]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, scene.prefilterMap, i);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderCube();
+        }
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("prefilterPass");
+
+}
+void RenderPipeline::genBrdfLUT()
+{
+    // pre-allocate enough memory for the LUT texture.
+    glGenTextures(1, &brdfLUT);
+    glBindTexture(GL_TEXTURE_2D, brdfLUT);
+    checkGLError("pre");
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, 0);
+    checkGLError("A");
+    // be sure to set wrapping mode to GL_CLAMP_TO_EDGE
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // then re-configure capture framebuffer object and render screen-space quad with BRDF shader.
+    glBindFramebuffer(GL_FRAMEBUFFER, captureFBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, captureRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 512, 512);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, brdfLUT, 0);
+    checkGLError("B");
+    glViewport(0, 0, 512, 512);
+    brdfShader_->use();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    renderQuad();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    checkGLError("genBrdfLUTPass");
 }
 GLuint RenderPipeline::getWhiteTex() {
     if (whiteTex_ != 0) return whiteTex_;

@@ -59,6 +59,12 @@ struct vec3f
         Y = xyz[1];
         Z = xyz[2];
     }
+    vec3f(const float* xyz)
+    {
+        X = xyz[0];
+        Y = xyz[1];
+        Z = xyz[2];
+    }
     vec3f(float _X, float _Y, float _Z, float _w)
     {
         X = _X;
@@ -161,6 +167,10 @@ inline float vector_dot(const vec4f& vec1, const vec4f& vec2) {
 }
 inline float vector_length(const vec3f& v) {
     return sqrtf(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+}
+inline float vector_dist(const vec3f& a, const vec3f& b)
+{
+    return sqrtf( pow((b.x - a.x), 2) +  pow((b.y - a.y), 2) + pow((b.z - a.z), 2));
 }
 inline vec3f vector_normalize(const vec3f& vec1) {
     float l = vector_length(vec1);

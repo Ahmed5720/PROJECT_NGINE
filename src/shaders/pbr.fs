@@ -70,7 +70,9 @@ uniform bool hasAoTex;
 uniform bool hasMetallicTex;
 uniform vec3 viewPos;
 uniform sampler2D shadowMap;
+uniform sampler2D brdfLUT;
 uniform samplerCube environment;
+uniform samplerCube specularMipMap;
 uniform float ambientStrength;
 uniform DirLight dirLight;
 uniform PointLight pointLights[N_MAX_POINT_LIGHTS];
@@ -81,6 +83,7 @@ float DistributionGGX(vec3 N, vec3 H, float roughness);
 float GeometrySchlickGGX(float NdotV, float roughness);
 float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness);
 vec3 fresnelSchlick(float cosTheta, vec3 F0);
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness);
 vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0, float roughness, float metallic);
 float calcShadow(vec4 FragPosLightSpace, vec3 l, vec3 normal);
 vec3 CalcPointLight(PointLight pl, vec3 fragPos, vec3 N, vec3 V, vec3 diffuse, vec3 F0, float roughness, float metallic);
@@ -141,7 +144,15 @@ void main()
     kD *= 1.0 - metallic;
     vec3 irradiance = texture(environment, normal).rgb;
     vec3 diffuseLight = irradiance * diffuse;
-    vec3 ambient = (kD * diffuseLight) * ao;
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 N = normal;
+    vec3 V = normalize(viewDir - FragPos);
+    vec3 R = reflect(-V, N);
+    vec3 prefilteredColor = textureLod(specularMipMap, R, roughness * MAX_REFLECTION_LOD).rgb;
+    vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec2 brdf =  texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specularLight = prefilteredColor  * (F * brdf.x + brdf.y);
+    vec3 ambient = (kD * diffuseLight + specularLight) * ao;
     
   //  vec3 ambient = texture(environment, normal).rgb * 0.1f;
     vec3 color = pLight + ambient + (1 - shadow) * Lo;
@@ -195,6 +206,10 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}   
 vec3 CalcDirLight(DirLight light, vec3 N, vec3 V, vec3 diffuse, vec3 F0,float roughness, float metallic)
 {
     // calculate light radiance

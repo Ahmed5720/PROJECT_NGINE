@@ -53,6 +53,7 @@ struct Material {
     float metallic = 0;
     float alpha = 1.0;
     bool emissive = false;
+    bool transparent = false;
     std::string name;
 
     Material()                           = default;

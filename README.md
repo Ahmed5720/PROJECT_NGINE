@@ -26,7 +26,7 @@ This project is practically a testbed for everything I have learned studying com
 - wireframe rendering of RigidBody Bounding Boxes
 - Image based Diffuse/ Specular Lighting 
 ![Alt text](media/bronco6.png)
-![Alt text](media/wine4.png)
+![Alt text](media/wine6.png)
 ![Alt text](media/bronco2.png)
 
 
