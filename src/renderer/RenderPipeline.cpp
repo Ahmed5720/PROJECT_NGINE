@@ -81,10 +81,10 @@ void debugDrawDepthTex(GLuint tex) {
 
 } // namespace
 // here the shader is first built on 
-RenderPipeline::RenderPipeline(shader* pbrShader, shader* wfShader, ParticleRenderer* particleRenderer, shader* skyShader, shader* shadow, shader* hdrCapture, shader* prefilter, shader* brdf, shader* convolve)
-    : pbrShader_(pbrShader), wireFrameShader_(wfShader), particleRenderer_(particleRenderer) ,
-    skyBoxShader_(skyShader) , shadowShader_(shadow) , captureHdrShader_(hdrCapture) ,
-    prefilterShader_(prefilter) , brdfShader_(brdf) , convolveShader_(convolve) {
+RenderPipeline::RenderPipeline(unique_ptr<shader> pbrShader, unique_ptr<shader> wfShader, unique_ptr<ParticleRenderer> particleRenderer,unique_ptr<shader> skyShader,unique_ptr<shader> shadow, unique_ptr<shader> hdrCapture, unique_ptr<shader> prefilter, unique_ptr<shader> brdf, unique_ptr<shader> convolve)
+    : pbrShader_(move(pbrShader)), wireFrameShader_(move(wfShader)), particleRenderer_(move(particleRenderer)) ,
+    skyBoxShader_(move(skyShader)) , shadowShader_(move(shadow)) , captureHdrShader_(move(hdrCapture)) ,
+    prefilterShader_(move(prefilter)) , brdfShader_(move(brdf)) , convolveShader_(move(convolve)) {
     wireFrameMesh_.init();
 }
 
@@ -209,6 +209,7 @@ void RenderPipeline::render(Scene& scene, int framebufferW, int framebufferH,
         renderSkyBoxPass(scene, view, projection);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         renderLightingPass(scene, view, projection, lightSpace);
+        glBindFramebuffer(GL_FRAMEBUFFER, sceneFbo_);
         renderWireframePass(scene, view, projection);
        // debugDrawDepthTex(depthMap); 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -373,7 +374,7 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
         
         // Model matrix
         
-        renderNode(scene, node, pbrShader_);
+        renderNode(scene, node);// pbrShader_);
         
     }
 
@@ -401,14 +402,14 @@ void RenderPipeline::renderLightingPass(Scene& scene, const mat4x4& view, const 
         if (node.meshIndex == -1) continue;
         if (node.meshIndex >= static_cast<int>(scene.meshes.size())) continue;
     
-        renderNode(scene, node, pbrShader_);
+        renderNode(scene, node);//  pbrShader_);
     }
     glDisable(GL_BLEND);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGLError("renderPBRpass");
 }
 
-void RenderPipeline::renderNode(const Scene& scene,const SceneNode& node, shader* pbrShader_)
+void RenderPipeline::renderNode(const Scene& scene,const SceneNode& node) //  make_unique<shader> pbrShader_)
 {
     
 
@@ -510,7 +511,7 @@ void RenderPipeline::renderWireframePass(Scene& scene, const mat4x4& view, const
     }
     glEnable(GL_DEPTH_TEST);
     glLineWidth(1.0f);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  //  glBindFramebuffer(GL_FRAMEBUFFER, 0);
     checkGLError("renderLinePass");
 }
 

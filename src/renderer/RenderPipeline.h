@@ -11,8 +11,11 @@
 class RenderPipeline {
 public:
     bool drawBoundingBox = false;
-    RenderPipeline(shader* pbrShader, shader* wireframeShader, ParticleRenderer* particleRenderer,
-    shader* skyBoxShader, shader* shadowShader, shader* hdrCaptureShader, shader* prefilter, shader* brdf, shader* convolve);
+    RenderPipeline(unique_ptr<shader> pbrShader, unique_ptr<shader> wireframeShader,
+    unique_ptr<ParticleRenderer> particleRenderer,
+    unique_ptr<shader> skyBoxShader, unique_ptr<shader> shadowShader,
+    unique_ptr<shader> hdrCaptureShader, unique_ptr<shader> prefilter,
+    unique_ptr<shader> brdf, unique_ptr<shader> convolve);
     ~RenderPipeline();
 
     void render(Scene& scene, int framebufferW, int framebufferH, float zNear, float zFar);
@@ -22,7 +25,7 @@ private:
     void captureHdrCubeMap(Scene& scene);
     void renderCube();
     void renderQuad();
-    void renderNode(const Scene& scene, const SceneNode& node, shader* pbrShader_);
+    void renderNode(const Scene& scene, const SceneNode& node); // shader* pbrShader_);
     void renderShadowPass(Scene& scene, const mat4x4& view, const mat4x4& projection);
     void renderLightingPass(Scene& scene, const mat4x4& view, const mat4x4& projection, const mat4x4& lightSpace);
     void renderWireframePass(Scene& scene, const mat4x4& view, const mat4x4& projection);
@@ -35,16 +38,16 @@ private:
     void destroySceneFramebuffer();
     GLuint getWhiteTex();
     WireFrameMesh wireFrameMesh_;
-    shader* wireFrameShader_ = nullptr;
-    shader* phongShader_ = nullptr;
-    shader* skyBoxShader_ = nullptr;
-    shader* shadowShader_ = nullptr;
-    shader* pbrShader_ = nullptr;
-    shader* captureHdrShader_ = nullptr;
-    shader* prefilterShader_ = nullptr;
-    shader* brdfShader_ = nullptr;
-    shader* convolveShader_ = nullptr;
-    ParticleRenderer* particleRenderer_ = nullptr;
+    unique_ptr<shader> wireFrameShader_ = nullptr;
+    unique_ptr<shader> phongShader_ = nullptr;
+    unique_ptr<shader> skyBoxShader_ = nullptr;
+    unique_ptr<shader> shadowShader_ = nullptr;
+    unique_ptr<shader> pbrShader_ = nullptr;
+    unique_ptr<shader> captureHdrShader_ = nullptr;
+    unique_ptr<shader> prefilterShader_ = nullptr;
+    unique_ptr<shader> brdfShader_ = nullptr;
+    unique_ptr<shader> convolveShader_ = nullptr;
+    unique_ptr<ParticleRenderer> particleRenderer_ = nullptr;
     EditorUI editorUI_;
 
     GLuint sceneFbo_ = 0;

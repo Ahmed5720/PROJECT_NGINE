@@ -1,5 +1,8 @@
 #pragma once
 #include "miniVM.h"
+
+
+
 struct Scene;// forward declaration
 struct RigidBody
 {
@@ -12,7 +15,7 @@ struct RigidBody
     vec3f force = {0,0,0};
     vec3f center = {0,0,0}; // to do: ensure that center actually updates with sceneNode position
     float mass = 1.0f;
-    float restitution = 0.5f;
+    float restitution = 3.5f;
     bool isStatic = true; // responds to collisions when enabled is true
     bool useGravity = false; 
     bool isEnabled = true;
@@ -27,17 +30,26 @@ struct RigidBody
 //  4. when theres an overlap we find the minimum translation vector and push the objects apart along that axe
 //  
 class PhysX
-{   const float Gravity = -9.8;
-    const float eps = 0.01; // min collision distance
-    static constexpr int kMaxProjectiles = 32;
-    std::vector<std::pair<int, int>> collisions; // scene node index pairs
-    std::vector<int> projectileNodeIndices_;
+{   
     public:
+        static float kRestVelocityThreshold;
+        static float kVelocitySleepThreshold;
+        static float kPositionSlop;
+        static float kLinearDamping;
+        static float groundLevel;
+        static float Gravity;
+
+        const float eps = 0.01; // min collision distance
+        static constexpr int kMaxProjectiles = 32;
+        std::vector<std::pair<int, int>> collisions; // scene node index pairs
+        std::vector<int> projectileNodeIndices_;
+
         explicit PhysX(Scene& scene);
         ~PhysX() = default;
         void step(float dt, Scene& scene);
         void updateWorldBounds(Scene& scene);
         void updateTransforms(Scene& scene);
+        static void setStatic(RigidBody& rb);
         void shootProjectile(Scene& scene, int meshIndex, const vec3f& origin,
                              const vec3f& direction, float speed, float scale = 0.25f);
     private:

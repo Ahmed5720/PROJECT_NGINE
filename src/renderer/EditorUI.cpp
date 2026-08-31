@@ -222,6 +222,8 @@ void EditorUI::drawStatsPanel(Scene& scene, const Layout& layout) {
     ImGui::End();
 }
 
+
+
 void EditorUI::drawSelectedNodeSection(Scene& scene) {
     if (selectedNode_ < 0 || selectedNode_ >= static_cast<int>(scene.nodes.size())) {
         ImGui::TextDisabled("Select a node in the Scene Graph");
@@ -229,8 +231,10 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
     }
 
     SceneNode& node = scene.nodes[selectedNode_];
+    RigidBody& rb = scene.rbs[node.rbIndex];
     ImGui::Text("%s", node.name.c_str());
-    ImGui::DragFloat3("Position", node.position, 0.01f, -100.f, 100.f);
+    ImGui::DragFloat("pos Z", &rb.position.Y, 0.01f, -100.f, 100.f);
+    // ImGui::DragFloat3("Position", {rb2.position.X, rb2.position.Y, rb2.position.Z} , 0.01f, -100.f, 100.f);
     ImGui::DragFloat3("Rotation", node.rotation, 1.f, -180.f, 180.f);
     ImGui::DragFloat3("Scale", node.scale, 0.01f, 0.01f, 100.f);
     ImGui::Separator();
@@ -251,8 +255,12 @@ void EditorUI::drawSelectedNodeSection(Scene& scene) {
         return;
     }
 
-    RigidBody& rb = scene.rbs[node.rbIndex];
-    ImGui::Checkbox("Static##rb", &rb.isStatic);
+    if(ImGui::Checkbox("Static##rb", &rb.isStatic))
+    {
+        PhysX::setStatic(rb); 
+    }
+    ImGui::DragFloat("restitution", &rb.restitution, 0.01, 0.0, 10.0);
+
     ImGui::Checkbox("Use Gravity##rb", &rb.useGravity);
 }
 
@@ -329,7 +337,16 @@ void EditorUI::drawLightingSection(Scene& scene, float pi) {
 void EditorUI::drawPhysicsSection(Scene& scene, bool* drawBoundingBox) {
     if (drawBoundingBox)
         ImGui::Checkbox("Show Bounding Boxes", drawBoundingBox);
+    
 
+    // physics params
+
+    ImGui::DragFloat("Rest Velocity Threshold", &PhysX::kRestVelocityThreshold, 0.01f, 0.0f, 1.0f);
+    ImGui::DragFloat("Velocity Sleep Threshold", &PhysX::kVelocitySleepThreshold, 0.001f, 0.0f, 0.1f);
+    ImGui::DragFloat("Position Slop", &PhysX::kPositionSlop, 0.0001f, 0.0f, 0.01f);
+    ImGui::DragFloat("Linear Damping", &PhysX::kLinearDamping, 0.01f, 0.0f, 1.0f);
+    ImGui::DragFloat("Ground Level", &PhysX::groundLevel, 0.1f, -10.0f, 10.0f);
+    ImGui::DragFloat("Gravity", &PhysX::Gravity, 0.1f, -30.0f, 0.0f);
     ImGui::Separator();
 
     if (selectedNode_ < 0 || selectedNode_ >= static_cast<int>(scene.nodes.size())) {
@@ -347,7 +364,7 @@ void EditorUI::drawPhysicsSection(Scene& scene, bool* drawBoundingBox) {
     }
     ImGui::Spacing();
     if (ImGui::CollapsingHeader("SPH (preview)", ImGuiTreeNodeFlags_None)) {
-        ImGui::TextDisabled("Parameters reserved for future SPH integration.");
+        ImGui::TextDisabled("Parameters for SPH integration.");
         ImGui::Text("Particle count: %d", PARTICLE_COUNT);
     }
 }

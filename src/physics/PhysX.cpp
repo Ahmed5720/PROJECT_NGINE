@@ -5,13 +5,20 @@
 #include <cmath>
 #include <string>
 
-namespace {
-constexpr float kRestVelocityThreshold  = 0.5f;
-constexpr float kVelocitySleepThreshold = 0.003f;
-constexpr float kPositionSlop           = 0.001f;
-constexpr float kLinearDamping          = 0.5f;
-constexpr float groundLevel = 0.0;
-}
+// namespace {
+// constexpr float kRestVelocityThreshold  = 0.5f;
+// constexpr float kVelocitySleepThreshold = 0.003f;
+// constexpr float kPositionSlop           = 0.001f;
+// constexpr float kLinearDamping          = 0.05f;
+// constexpr float groundLevel = 0.0;
+// }
+
+float PhysX::kRestVelocityThreshold = 0.5f;
+float PhysX::kVelocitySleepThreshold = 0.003f;
+float PhysX::kPositionSlop           = 0.001f;
+float PhysX::kLinearDamping          = 0.05f;
+float PhysX::groundLevel = 0.0;
+float PhysX::Gravity = -2.8f;
 
 PhysX::PhysX(Scene& scene)
 {
@@ -30,6 +37,12 @@ void PhysX::step(float dt, Scene& scene)
     solveCollision(scene);
 }
 
+// set static should zero out velocity too, to prevent unintended consequences
+void PhysX::setStatic(RigidBody& rb)
+{
+    // rb.isStatic = true; // increasingly this is getting more and more sloppy.
+    rb.velocity = {0,0,0};
+}
 
 void PhysX::updateWorldBounds(Scene& scene)
 {
@@ -298,8 +311,8 @@ void PhysX::integrate(float dt, Scene& scene)
         if (rb.isStatic || !rb.isEnabled)
             continue;
 
-        if (rb.useGravity && rb.position.y > groundLevel)
-            rb.velocity.Y += Gravity * dt;
+        if (rb.useGravity  && rb.position.y > groundLevel)
+             rb.velocity.Y += Gravity * dt;
 
         const float damping = 1.0f / (1.0f + kLinearDamping * dt);
         rb.velocity.X *= damping;
@@ -326,8 +339,8 @@ void PhysX::updateTransforms(Scene& scene)
             continue;
 
         RigidBody& rb = scene.rbs[s.rbIndex];
-        if (rb.isStatic || !rb.isEnabled)
-            continue;
+        // if (rb.isStatic || !rb.isEnabled)
+        //     continue;
         std::copy(&rb.position.x, &rb.position.x + 3, s.position);
     }
 }

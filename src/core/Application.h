@@ -29,18 +29,19 @@ private:
     bool initialized_ = false;
 
     Scene scene_;
-    PhysX* simulator_ = nullptr;
-    shader* phongShader_ = nullptr;
-    shader* pbrShader_ = nullptr;
-    shader* wireFrameShader_ = nullptr;
-    shader* skyBoxShader_ = nullptr;
-    shader* shadowShader_ = nullptr;
-    shader* captureHdrShader_ = nullptr;
-    shader* prefilterShader_ = nullptr;
-    shader* brdfShader_ = nullptr;
-    shader* convolveShader_ = nullptr;
-    ParticleRenderer* particleRenderer_ = nullptr;
-    GaussianRenderer* gaussianRenderer_ = nullptr;
-    RenderPipeline* pipeline_ = nullptr;
+
+    std::shared_ptr<PhysX> simulator_;
+    std::unique_ptr<shader> phongShader_;
+    std::unique_ptr<shader> pbrShader_ ;
+    std::unique_ptr<shader> wireFrameShader_ ;
+    std::unique_ptr<shader> skyBoxShader_ ;
+    std::unique_ptr<shader> shadowShader_ ;
+    std::unique_ptr<shader> captureHdrShader_ ;
+    std::unique_ptr<shader> prefilterShader_ ;
+    std::unique_ptr<shader> brdfShader_ ;
+    std::unique_ptr<shader> convolveShader_ ;
+    std::unique_ptr<ParticleRenderer> particleRenderer_ ;
+    //GaussianRenderer* gaussianRenderer_ ;
+    std::unique_ptr<RenderPipeline> pipeline_ ;
     int projectileMeshIndex_ = -1;
 };

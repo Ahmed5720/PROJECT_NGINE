@@ -74,7 +74,7 @@ struct Config {
         shadowVsPath   = slash(shaderDir, "shadow.vs");
         shadowFsPath   = slash(shaderDir, "shadow.fs");
         sphComputePath = slash(shaderDir, "sph_compute.glsl");
-        objPath        = slash(basePath, "..");
+        objPath        = slash(basePath, "../models");
         objPath        = slash(objPath, "wineNew.obj");
         texturePath    = slash(basePath, "textures");
         hdr            = slash(texturePath, "cowboy.hdr");
