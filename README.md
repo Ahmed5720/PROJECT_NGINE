@@ -17,12 +17,12 @@ This project is practically a testbed for everything I have learned studying com
 - Scene hiararchy: different objects represented as nodes (sharing materials)
 - SkyBox rendering (cubemapping) 
 - PBR with Texture Mapping (Diffuse, Roughness, Metallic, Normal, AO)
-- Emissive & Transparent Materials WIP
+- Emissive & Transparent Materials
 - Rienhard tonemapping + Gamma correction
 - Shadow Mapping
 - lighting (Directional, Point, and Spot Lights) WIP
 - UI system 
-- rigid body physics (on Seperate thread) WIP.
+- multi-threaded rigid body physics.
 - wireframe rendering of RigidBody Bounding Boxes
 - Image based Diffuse/ Specular Lighting 
 ![Alt text](media/wine6.png)
@@ -32,18 +32,27 @@ This project is practically a testbed for everything I have learned studying com
 
 
 ## TBD
-- Extending Physx to be actually useful
-- Bloom
-- Gizmos for light sources
-- Object Selection using mouse cursor (screenToWorld project)
-- Json Scene description import / export
-- Cube mapped shadows for Point Lights
-- Planar reflections with projective texture mapping
-- Foilage rendering with Geometry shader
-- Light probes?
-- indirect rendering to reduce drawcalls
-- View Frustum Culling
-- multiple rendering passes (deferred rendering)
+- **Extending Physx to be actually useful**:
+- 1. sphere collider support
+- 2. rigid body rotation
+- Engine UI & usability
+- 1. migrate to gltf to support object hiarachies.
+- 2. Gizmos for light sources
+- 3. Object Selection using mouse cursor (screenToWorld project)
+- 4. Json Scene description import / export
+- **More fancy graphics stuff**
+- 1. Bloom
+- 2. Cube mapped shadows for Point Lights
+- 3. Planar reflections with projective texture mapping
+- 4. Foilage rendering with Geometry shader
+- 5. Light probes / dynamic reflections
+- **Performance Optimizations**:
+- 1. Sort and Sweep Collision Resolver
+- 2. indirect rendering to reduce drawcalls
+- 3. View Frustum Culling
+- 4. multiple rendering passes (deferred rendering)
+- **Performance profiling**:
+- 1. time each render pass
   
 
 
