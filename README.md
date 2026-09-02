@@ -42,6 +42,7 @@ This project is practically a testbed for everything I have learned studying com
 - Foilage rendering with Geometry shader
 - Light probes?
 - indirect rendering to reduce drawcalls
+- View Frustum Culling
 - multiple rendering passes (deferred rendering)
   
 
