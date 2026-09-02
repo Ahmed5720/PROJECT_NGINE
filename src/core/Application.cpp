@@ -19,6 +19,7 @@
 #include <vector> 
 #include <thread>
 #include <memory>
+#include <chrono>
 
 namespace {
 // TO DO put this somewhere else, we need a utils prollly
@@ -347,12 +348,25 @@ bool Application::init() {
 void Application::run() {
     while (!glfwWindowShouldClose(window_)) {
         processInput(0.016f);
+    
+        auto start = std::chrono::high_resolution_clock::now();
         pipeline_->render(scene_,config_.windowWidth, config_.windowHeight, config_.zNear, config_.zFar);
-        // TO DO measure timing to see if this is any useful..
+        auto render_end = std::chrono::high_resolution_clock::now();
+        auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(render_end - start);
+        std::cout << "Render time: " << render_duration.count() << " µs" << std::endl;
+
+        auto physics_start = std::chrono::high_resolution_clock::now();
         std::thread physics_t(&PhysX::step, simulator_, 0.01, std::ref(scene_));
         physics_t.join();
+        auto physics_end = std::chrono::high_resolution_clock::now();
+        auto physics_duration = std::chrono::duration_cast<std::chrono::microseconds>(physics_end - physics_start);
+        std::cout << "Physics time: " << physics_duration.count() << " µs" << std::endl;
+        
         simulator_->updateTransforms(scene_);
-            
+        auto total_end = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(total_end - start);
+        std::cout << "Total frame time: " << total_duration.count() << " µs" << std::endl;
+
         // if (pipeline_->takeShootRequest() && simulator_ && projectileMeshIndex_ >= 0) {
         //     const vec3f forward = scene_.camera.getForward();
         //     simulator_->shootProjectile(scene_, projectileMeshIndex_, scene_.camera.position,
